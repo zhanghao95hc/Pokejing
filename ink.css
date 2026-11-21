@@ -1,0 +1,87 @@
+/* Ink-wash album. The painted grounds, character cutouts and route maps share one palette. */
+:root {
+  --ink: #242724;
+  --pine: #334a43;
+  --muted: #625f55;
+  --paper: #f8f5eb;
+  --line: #c7c0b0;
+  --seal: #953f32;
+  --brush: "STKaiti","KaiTi","Kaiti SC","Songti SC","SimSun",serif;
+}
+body {
+  background-color: var(--paper);
+  background-image: radial-gradient(ellipse at 0% 0%, #bdb8a126, transparent 56%),
+    repeating-linear-gradient(99deg, transparent 0 12px, #675b3910 13px, transparent 14px 23px);
+  background-size: auto, 167px 3px;
+}
+#top { background: #f6f3e9; border-bottom-color: #b6ac99; }
+.brand-seal {
+  display: inline-grid; place-items: center; width: 30px; height: 35px;
+  background: #a14536; color: #fff3db; border: 1px solid #954232; outline: 1px solid #f6eed9;
+  outline-offset: -3px; border-radius: 3px 1px 4px 2px; transform: rotate(-3deg);
+  font: 700 15px/.85 var(--brush); writing-mode: vertical-rl; letter-spacing: .03em;
+}
+.wordmark { font: 700 clamp(22px,2.15vw,32px)/1.1 var(--brush); letter-spacing: .13em; }
+.nav button { color: #5f625a; }
+.nav button[aria-current=page] {
+  color: var(--seal); background: transparent;
+  box-shadow: inset 0 -2px var(--seal); border-radius: 0;
+}
+.nav button:hover { background: #e9e6da; }
+.avatar { background: transparent; border: 1px solid #938775; color: #5e655c; font: 700 18px var(--brush); }
+.hero { background-position: center 50%; }
+.hero:before { background: linear-gradient(90deg, #15211fc2 0, #28302c76 30%, transparent 65%); }
+.hero-content h1, .page-title h1 { font-family: var(--brush); }
+.hero-content h1 { font-weight: 700; letter-spacing: .045em; }
+.hero .loc, .hero p { color: #fff7e8; }
+.hero p { font-family: var(--serif); }
+.page-title h1 { line-height: 1.18; letter-spacing: .055em; }
+.page-title { margin-bottom: 15px; }
+.panel, .member, .dex-entry, .specimen, .game-window, .arena, .field-lead, .meter, .duo-meter, dialog { border-radius: 3px; }
+.panel, .member, .dex-entry, .specimen { background: #fcf9f0; border-color: #bdb6a5; }
+.panel h2, .member h2, .dex-entry h2, .spec-copy strong, .choice-name, .field-lead b, .dossier h3, .dialog-head h2 { font-family: var(--brush); }
+.specimen { background: #faf6e9; box-shadow: none; }
+.specimen.selected { outline-color: var(--seal); border-color: var(--seal); box-shadow: inset 0 0 0 1px #a44d3440; }
+.plate {
+  background: radial-gradient(ellipse at 13% 97%, #c8d0be60, transparent 46%), #f3efe3;
+  border-color: #afa48b5e; border-radius: 2px;
+}
+.plate:before, .plate:after { content: none; }
+.spec-art { filter: none; align-self: center; margin-bottom: 0; }
+.pick-mark {
+  background: var(--seal); border-radius: 2px 3px 1px 3px; transform: rotate(-4deg); color: #fff5de;
+}
+.plate-head { color: #53594d; }
+.plate-head .num { color: #7c4939; }
+.small-label, .note { color: var(--muted); }
+.thumb, .field-lead, .dossier .portrait { background: #efecdf; border-color: #c7bda5; }
+.instrument, .world-strip, .bag-ledger { background: #eeeadd; color: #484d46; }
+.game-window { border: 1px solid #797d70; }
+.instrument > span:first-child { font: 700 16px var(--brush); }
+.map-pin { border-color: #6c7065; color: #333c35; background: #faf6e9f2; box-shadow: 0 1px 3px #222b2438; }
+.map-pin.near, .map-pin:hover { background: #74392e; color: #fff5e5; border-color: #65362d; }
+.map-pin.near:after, .map-pin:hover:after { border-top-color: #65362d; }
+.btn.primary {
+  background: #353f39; border-color: #343d37; color: #fff8e8;
+  box-shadow: inset 0 0 0 2px #353f39, inset 0 0 0 3px #c7c5b281;
+}
+.btn.primary:hover:enabled { background: #4b584f; }
+.move { background: #f4f0e3; border-color: #c1bba8; }
+.move:hover:enabled { border-color: #887965; background: #ede5d4; }
+.stat-table thead { background: #eee8d8; color: #3c493f; }
+.hp i { background: #526e62; }.hp i.warn { background: #b48143; }.hp i.low { background: var(--seal); }
+.xp-mini i { background: #689092; }
+.arena { border-color: #868575; background-color: #e6e5d8; }
+.meter, .duo-meter { background: #faf6e9f5; border-color: #828577; }
+.meter strong { font-family: var(--brush); }
+.fighter, .pair-fighter>img { filter: drop-shadow(0 3px 2px #27312335); }
+.fainted>img { filter: grayscale(1); }
+@media(max-width:650px) {
+  .brand-seal { width: 17px; height: 25px; font-size: 10px; }
+  .wordmark { font-size: 18px; letter-spacing: .035em; }
+  .instrument > span:first-child { font-size: 13px; }
+  .hero-content h1 { font-size: clamp(26px,7.8vw,40px); }
+  .hero:before { background: linear-gradient(90deg, #192320df, #212b269b 63%, #25322a3d); }
+  .spec-art { margin-bottom: 0; }
+}
+

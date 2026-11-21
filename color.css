@@ -1,0 +1,116 @@
+/* Mineral pigments, celadon porcelain and vermilion seals. */
+:root {
+  --ink: #132e38;
+  --pine: #165954;
+  --muted: #52616a;
+  --paper: #f8f4e8;
+  --line: #c6bd9f;
+  --seal: #a13226;
+  --brush: "STKaiti", "KaiTi", "Kaiti SC", "Songti SC", "SimSun", serif;
+}
+body { background: radial-gradient(ellipse at 100% 0, #ece3cc80, transparent 45%), var(--paper); }
+#top { background: #fcf8eb; border-bottom: 1px solid #bba879; }
+.brand-seal {
+  display: inline-grid; place-items: center; width: 30px; height: 35px;
+  background: var(--seal); color: #fff6d9; border: 1px solid #87291d;
+  outline: 1px solid #f9dbad; outline-offset: -3px; border-radius: 3px;
+  transform: rotate(-3deg); font: 700 15px/.85 var(--brush); writing-mode: vertical-rl; letter-spacing: .03em;
+}
+.wordmark { font: 700 clamp(22px, 2.15vw, 32px)/1.1 var(--brush); letter-spacing: .13em; }
+.nav button { color: #40555c; }
+.nav button[aria-current=page] { color: var(--seal); background: transparent; box-shadow: inset 0 -2px var(--seal); border-radius: 0; }
+.nav button:hover { background: #f2e8d3; }
+.avatar { border-color: #546e6f; color: #fff6df; background: #235a60; font: 700 18px var(--brush); }
+.hero { background-position: center 50%; }
+.hero:before { background: linear-gradient(90deg, #102b3edc, #182e4299 27%, transparent 66%); }
+.hero-content h1, .page-title h1, .panel h2, .member h2, .dex-entry h2, .spec-copy strong,
+.choice-name, .field-lead b, .dossier h3, .dialog-head h2, .meter strong, .duo-meter b { font-family: var(--brush); }
+.hero-content h1 { font-weight: 700; letter-spacing: .045em; }
+.hero .loc, .hero p { color: #fff8e4; }
+.hero p { font-family: var(--serif); }
+.page-title { margin-bottom: 15px; }
+.page-title h1 { line-height: 1.18; letter-spacing: .055em; }
+.panel, .member, .dex-entry, .specimen, .game-window, .arena, .field-lead, .meter, .duo-meter, dialog { border-radius: 4px; }
+.panel, .member, .dex-entry, .specimen { background: #fffaf0; border-color: var(--line); }
+.specimen { background: #fff9ea; box-shadow: none; }
+.specimen.selected { outline-color: var(--seal); border-color: var(--seal); }
+.plate { background-color: #eff0de; border-color: #b9b497; }
+.plate:before, .plate:after { content: none; }
+.rock .plate, .air .plate, .volt .plate {
+  background-image: linear-gradient(120deg, #fffaec99, transparent); background-size: cover;
+}
+.rock .plate { background-color: #e9deda; }
+.air .plate { background-color: #dcece2; }
+.volt .plate { background-color: #f8e8b5; }
+.spec-art { filter: none; align-self: center; margin-bottom: 0; }
+.pick-mark { background: var(--seal); border-radius: 2px; transform: rotate(-4deg); color: #fff5db; }
+.plate-head { color: #243f48; }
+.plate-head .num { color: #70382d; }
+.thumb, .field-lead, .dossier .portrait { background: #e8eee4; border-color: #9fbaad; }
+.instrument, .world-strip, .bag-ledger { background: #e9eee4; color: #294d53; }
+.instrument > span:first-child { font: 700 16px var(--brush); }
+.game-window { border: 1px solid #758e83; }
+.map-pin { border-color: #395259; background: #fff9e9; color: #213c41; box-shadow: 0 1px 3px #182c3c42; }
+.map-pin.near, .map-pin:hover { background: #96382a; color: #fff7dd; border-color: #763324; }
+.map-pin.near:after, .map-pin:hover:after { border-top-color: #763324; }
+.walker {
+  filter: drop-shadow(.7px .7px 0 #172c3c) drop-shadow(-.7px -.7px 0 #172c3c)
+    drop-shadow(0 1px 0 #fff2d6) drop-shadow(0 -1px 0 #fff2d6)
+    drop-shadow(1px 0 0 #fff2d6) drop-shadow(-1px 0 0 #fff2d6) drop-shadow(0 2px 1px #16303dc9);
+}
+.btn.primary { background: #184e52; color: #fffae8; border-color: #143f44; box-shadow: inset 0 0 0 2px #184e52, inset 0 0 0 3px #bead7c; }
+.btn.primary:hover:enabled { background: #236165; }
+.move { background: #fcf6e7; border-color: #beb495; }
+.move:hover:enabled { border-color: #598780; background: #e9efe2; }
+.stat-table thead { background: #e8eddf; color: #27454b; }
+.hp { background: #ced7cf; }
+.hp i { background: #20765e; }
+.hp i.warn { background: #a96b1d; }
+.hp i.low { background: var(--seal); }
+.xp-mini i { background: #397a96; }
+.arena { background-color: #cadacc; border-color: #708478; }
+.meter, .duo-meter { color: #173239; background: #fffbef; border-color: #708d82; box-shadow: 0 2px 4px #25444c26; }
+.meter.enemy, .rival-side .duo-meter { border-color: #a77d64; }
+.duo-meter { border-top: 2px solid #31746b; }
+.rival-side .duo-meter { border-top-color: #a14f3a; }
+.fighter, .pair-fighter > img { filter: none; }
+.pair-fighter { isolation: isolate; }
+.pair-fighter::before, .pair-fighter > img { grid-area: 1 / 1; }
+.pair-fighter > img { object-position: center bottom; }
+.pair-fighter::before {
+  content: ""; z-index: -1; align-self: end; pointer-events: none;
+  width: 64%; max-width: 112px; height: 8px;
+  background: radial-gradient(ellipse, #344c463b, transparent 71%);
+}
+.fighter { z-index: 1; }
+.meter { z-index: 2; }
+.fainted > img { filter: grayscale(1); opacity: .62; }
+.arena:not(.duo-arena)::after {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 10% 2.2% at 33% 90.3%, #25423d39, transparent),
+    radial-gradient(ellipse 7.5% 1.6% at 70% 57.8%, #25423d30, transparent);
+}
+@media (max-width:650px) {
+  .brand-seal { width: 17px; height: 25px; font-size: 10px; }
+  .wordmark { font-size: 18px; letter-spacing: .035em; }
+  .hero-content h1 { font-size: clamp(26px, 7.8vw, 40px); }
+  .hero:before { background: linear-gradient(90deg, #102d3ddc, #18324498 65%, #17374635); }
+  .instrument > span:first-child { font-size: 13px; }
+  .arena { background-size: cover; }
+  .duo-arena {
+    display: grid; grid-template-columns: 1fr; grid-template-rows: repeat(2,minmax(0,1fr));
+    height: 320px; gap: 4px; padding: 21px 8px 7px;
+  }
+  .duo-arena .pair-side {
+    grid-column: 1; grid-row: 2; align-self: end; justify-self: start;
+    width: min(72%,288px); gap: 6px; margin: 0; padding: 0;
+  }
+  .duo-arena .rival-side { grid-row: 1; justify-self: end; }
+  .pair-fighter { flex: 1; }
+  .pair-fighter > img { height: 80px; object-position: center bottom; }
+  .duo-meter small { display: inline; white-space: nowrap; }
+  .arena:not(.duo-arena)::after {
+    background: radial-gradient(ellipse 14% 2.3% at 34% 92.5%, #25423d39, transparent),
+      radial-gradient(ellipse 11% 1.7% at 72.5% 59%, #25423d30, transparent);
+  }
+}

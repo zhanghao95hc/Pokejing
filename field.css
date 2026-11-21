@@ -1,0 +1,154 @@
+/* Interactive field controls and the two-person battle layout. */
+.plate-types { display: inline-flex; flex-wrap: wrap; justify-content: end; gap: 2px 6px; }
+.game-window {
+  overflow: hidden;
+  border: 1px solid #9eaa91;
+  border-radius: 7px;
+  background: #f8f5e8;
+}
+.instrument, .world-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 11px;
+  color: #4c5d49;
+  font-size: 12px;
+}
+.instrument { border-bottom: 1px solid var(--line); }
+.world-strip { border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.instrument > span, .world-strip span, .weather-tag, .meter-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.instrument > span:first-child { font: 700 14px var(--serif); }
+.instrument .map-instruments { gap: 12px; }
+.map-instruments button {
+  border: 1px solid #a9b099;
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: var(--pine);
+  font: 12px var(--sans);
+}
+.map-instruments button:hover, .map-instruments button[aria-pressed=true] { background: #e0e7d2; }
+.weather-tag { font-size: 12px; color: #796432; }
+.weather-tag.rain { color: #426b76; }
+.map-viewport { overflow: hidden; aspect-ratio: 3 / 2; background: #91a774; }
+.map-viewport .map {
+  transform-origin: 0 0;
+  transition: transform 85ms linear;
+  border: 0;
+  border-radius: 0;
+}
+.map.cove { background-image: url("assets/color/cove.webp"); }
+.map-pin { top: calc(var(--site-y) - 8%); }
+.map-pin.near { top: calc(var(--site-y) - 13.5%); }
+.walker.face-right { transform: translate(-50%, -92%) scaleX(-1); }
+.field-lead {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: #edf0e2;
+  border: 1px solid #bdc4ad;
+  border-radius: 6px;
+  padding: 9px 14px;
+}
+.field-lead:hover { background: #e5ead8; }
+.field-lead > img { width: 65px; height: 58px; object-fit: contain; }
+.field-lead > span { flex: 1; min-width: 0; }
+.field-lead small, .field-lead b { display: block; }
+.field-lead small { font: 11px var(--sans); color: var(--muted); }
+.field-lead b { font: 700 20px var(--serif); margin: 3px 0; }
+
+.arena { isolation: isolate; }
+.arena.region-cove { background-image: url("assets/color/tidal-arena.webp"); }
+.arena > .weather-tag {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 3;
+  padding: 2px 7px;
+  font-size: 11px;
+  background: #fbf7e9f2;
+  border: 1px solid #99a38b;
+  border-radius: 4px;
+}
+.arena.w-rain::before, .arena.w-sun::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+}
+.arena.w-rain::before {
+  background-image: linear-gradient(#557a9544, #2b4e5c15),
+    repeating-linear-gradient(110deg, transparent 0 27px, #ecf5ef45 28px, transparent 29px 102px);
+  background-size: cover, 195px 140px;
+  animation: sea-rain 1s linear infinite;
+}
+@keyframes sea-rain { to { background-position: 0 0, -51px 140px; } }
+.arena.w-sun::before { background: linear-gradient(130deg, #f8db9b30, transparent 67%); }
+.fighter.ally, .pair-side:not(.rival-side) .pair-fighter > img { transform: none; }
+.fighter.ally { left: 16%; }
+.fighter.foe { right: 13%; top: 6%; }
+.meter { width: clamp(160px, 21%, 272px); }
+.meter-tags { gap: 8px; font-size: 10px; color: var(--muted); }
+.meter-tags .type { font-size: 10px; }
+.meter-tags .ico { width: 11px; height: 11px; }
+.xp-mini { height: 3px; margin-top: 4px; background: #d2d9c6; border-radius: 2px; overflow: hidden; }
+.xp-mini i { display: block; height: 100%; background: #7ba295; }
+.pair-side { position: relative; z-index: 1; }
+.rival-side { padding-top: 17px; }
+
+.dossier { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 15px; }
+.dossier .portrait {
+  display: grid; place-items: center; padding: 7px; background: #edf0e1;
+  border: 1px solid #b8c1a9; border-radius: 5px;
+}
+.portrait img { width: 80px; height: 80px; object-fit: contain; }
+.dossier .type { display: inline-flex; margin-right: 7px; }
+.dossier h3 { margin: 5px 0; }
+.skill-notes { margin: 13px 0; font-size: 13px; }
+.skill-notes p { margin: 4px 0; }
+.skill-notes b { color: var(--pine); }
+.stat-table { width: 100%; font-size: 13px; border-collapse: collapse; margin: 12px 0 6px; text-align: center; font-variant-numeric: tabular-nums; }
+.stat-table th, .stat-table td { padding: 4px; border-bottom: 1px solid var(--line); }
+.stat-table thead, .bag-ledger { background: #e9ebdc; color: var(--pine); }
+.bag-ledger { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-block: 1px solid var(--line); font-size: 13px; }
+.dialog-row > .btn { white-space: nowrap; }
+.dialog-row.stocked { justify-content: initial; }
+.stocked > div { flex: 1; min-width: 0; }
+.stocked .item-art { width: 39px; height: 39px; object-fit: contain; }
+.stocked > button { flex-shrink: 0; }
+.float-scene {
+  height: 95px; position: relative; margin-bottom: 10px; overflow: hidden;
+  border: 1px solid #7e9682; border-radius: 5px;
+  background: #8cb3ac url("assets/color/tidal-arena.webp") 57% 76% / 270% auto;
+}
+.float-scene i {
+  position: absolute; left: 50%; top: 40%; width: 10px; height: 21px; border: 1px solid #4d594d;
+  border-radius: 4px 4px 50% 50%; background: linear-gradient(#a94b30 50%, #fcf2cf 50%);
+  box-shadow: 0 2px 4px #283e304a; animation: bob 1.1s ease-in-out infinite;
+}
+.float-scene.bite i { top: 60%; animation-duration: .32s; }
+@keyframes bob { 50% { translate: 0 4px; } }
+@media (max-width: 650px) {
+  .field-lead { grid-column: 1/-1; }
+  .field-lead > img { height: 45px; }
+  .instrument, .world-strip { padding: 4px 7px; font-size: 11px; }
+  .instrument > span:first-child { font-size: 12px; }
+  .instrument .map-instruments { gap: 6px; }
+  .map-side .tools { gap: 4px; }
+  .map-side .btn { font-size: 12px; padding: 7px 8px; }
+  .arena > .weather-tag, .meter-tags, .meter-tags .type { font-size: 9px; }
+  .meter { width: 120px; }
+  .meter-tags { gap: 4px; }
+  .fighter.ally { left: 14%; height: 53%; bottom: 7%; }
+  .fighter.foe { right: 8%; top: 11%; height: 48%; }
+  .dossier { grid-template-columns: 80px 1fr; }
+  .portrait img { width: 64px; height: 64px; }
+  .rival-side { padding-top: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arena.w-rain::before, .float-scene i { animation: none; }
+}
+
