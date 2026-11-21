@@ -343,7 +343,7 @@ const MistGame = (() => {
   function step(s,pos,rng=Math.random) {
     if(!s.starter||s.battle||!T.walkable(pos,s.region)||Math.abs(s.pos.x-pos.x)+Math.abs(s.pos.y-pos.y)!==1) return false;
     s.pos=pos;s.steps++;if(s.grace>0) s.grace--;
-    else if(T.inMeadow(...T.toPct(pos),s.region)&&rng()<.105) encounter(s,"wild",rng);
+    else if(T.tallGrass(pos,s.region)&&rng()<.105) encounter(s,"wild",rng);
     return true;
   }
   function valid(s) {
@@ -363,6 +363,16 @@ const MistGame = (() => {
     return ["camp","beacon","wild","dome"].includes(b.mode)&&Array.isArray(b.rivals)&&b.rivals.every(mon)&&!!b.rivals[b.foe]&&!!s.party[b.lead]&&
       Array.isArray(b.lines)&&Array.isArray(b.history)&&Array.isArray(b.participants)&&b.participants.every(i=>!!s.party[i])&&!!b.playerStage&&!!b.foeStage;
   }
-  return {stat,threshold,makeMon,fresh,start,restore,gain,encounter,act,leaveBattle,step,valid,startPair,pairRound,availableMoves,sail,canDuel};
+  function loadSave(previous){
+    const s=F.upgrade(previous);
+    if(!s||!["coast","cove"].includes(s.region))return null;
+    if(!T.walkable(s.pos,s.region)){
+      const ground=T.nearestGround(s.pos,s.region);
+      if(!ground)return null;
+      s.pos=ground;
+    }
+    return valid(s)?s:null;
+  }
+  return {stat,threshold,makeMon,fresh,start,restore,gain,encounter,act,leaveBattle,step,valid,loadSave,startPair,pairRound,availableMoves,sail,canDuel};
 })();
 if(typeof module!=="undefined") module.exports=MistGame;

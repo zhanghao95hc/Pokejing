@@ -41,7 +41,20 @@
   border: 0;
   border-radius: 0;
 }
-.map.cove { background-image: url("assets/color/cove.webp"); }
+.map.coast { background-image: url("assets/color/coast.webp?field=2"); }
+.map.cove { background-image: url("assets/color/cove.webp?field=2"); }
+.field-cover { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.map .walker { height: max(22px, 8.4%); }
+.foot-grass {
+  position: absolute; z-index: 4; pointer-events: none;
+  width: 2.4%; height: 2.8%; transform: translate(-50%, -70%);
+  background: url("assets/color/grass.webp") center bottom / contain no-repeat;
+  transition: left .08s linear, top .08s linear;
+}
+.cove .foot-grass { background-image: url("assets/color/reeds.webp"); }
+.ground-name { color: #3c554d; }
+.ground-name.in-grass { color: #1d624b; font-weight: 700; }
+.touch-pad button { touch-action: none; user-select: none; }
 .map-pin { top: calc(var(--site-y) - 8%); }
 .map-pin.near { top: calc(var(--site-y) - 13.5%); }
 .walker.face-right { transform: translate(-50%, -92%) scaleX(-1); }

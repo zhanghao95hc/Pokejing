@@ -9,10 +9,12 @@ function runMistcape() {
   let s=G.fresh(),saved=false,saveError=false,loaded=false;
   try {
     const raw=localStorage.getItem(KEY);
-    if(raw){const previous=JSON.parse(raw);if(previous?.version===1&&!localStorage.getItem(KEY+".v1"))localStorage.setItem(KEY+".v1",raw);const candidate=F.upgrade(previous);if(G.valid(candidate)){s=candidate;loaded=true;}else saveError=true;}
+    if(raw){const previous=JSON.parse(raw);if(previous?.version===1&&!localStorage.getItem(KEY+".v1"))localStorage.setItem(KEY+".v1",raw);const candidate=G.loadSave(previous);if(candidate){s=candidate;loaded=true;}else saveError=true;}
   } catch {saveError=true;}
   let facing="down",stride=1,walkEnd=null,fishTimer=null,fishReady=false;
   let tab="adventure",selected=s.starter||"moss",walkTimer=null,toastTimer=null,audio=null,boxIndex=null;
+  const heldDirections=new Map();
+  let previousSpot="";
   const paths={
     compass:'<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
     team:'<path d="M2 20c.2-4 2.6-6 6-6s5.8 2 6 6M15 14c3.9-.3 6 1.7 6.5 5"/><circle cx="8" cy="8" r="3.3"/><path d="M15 5c4.5-.4 5 6 .7 6.5"/>',
@@ -67,7 +69,7 @@ function runMistcape() {
     } catch {}
   }
   function toast(msg){$("#toast").textContent=msg;$("#toast").classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("#toast").classList.remove("show"),2100);}
-  function stopWalk(){clearInterval(walkTimer);walkTimer=null;}
+  function stopWalk(){clearInterval(walkTimer);walkTimer=null;heldDirections.clear();}
   function head(){
     $("#top").innerHTML=`<div class="brand">${brandMark}<div class="wordmark">雾岬物语</div></div>
     <nav class="nav" aria-label="主菜单">${[["adventure","compass","冒险"],["team","team","队伍"],["dex","book","图鉴"]].map(([id,i,n])=>`<button data-do="tab" data-arg="${id}" ${tab===id?'aria-current="page"':""}>${icon(i)}${n}</button>`).join("")}</nav>
@@ -87,7 +89,13 @@ function runMistcape() {
     <div class="selection"><div class="choice-meta">${art(selected,"thumb")}<div><span class="small-label">已选择同行伙伴</span><b class="choice-name">${d.name}</b></div><span class="traits">${types[d.type][0]}属性　/　${d.trait}　/　${d.role}</span></div>${btn("带上伙伴出发 "+icon("right"),"depart","","primary depart")}</div></div>`;
   }
   function hp(m){const max=G.stat(m,0),value=Math.round(m.hp/max*100);return `<div class="hp" role="meter" aria-label="体力" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${m.hp}"><i class="${value<=22?"low":value<=45?"warn":""}" style="width:${value}%"></i></div><div class="hp-txt">HP ${m.hp} / ${max}${m.status?"　"+F.statusNames[m.status]:""}</div>`;}
-  function activeSite(){return T.near(s.pos,s.region)||(T.inMeadow(...T.toPct(s.pos),s.region)?(s.region==="cove"?"pool":"grass"):"");}
+  function activeSite(){
+    const site=T.near(s.pos,s.region);
+    if(site&&site!=="pool"&&site!=="grass")return site;
+    if(!T.tallGrass(s.pos,s.region))return "";
+    return site||"cover";
+  }
+  const atFishingBank=()=>s.region==="cove"&&T.near(s.pos,s.region)==="pool";
   function nextGoal(){
   if(!s.camp)return "前往林间练习场，与巡林员青禾切磋。";
   if(!s.badge)return "前往望潮灯台，赢得第一枚徽章。";
@@ -96,13 +104,16 @@ function runMistcape() {
   return !G.canDuel(s)?"结缘瓦当蟹、桂月蛾或潮钟螺，取得观测台挑战资格。":s.secondBadge?"盐镜湾调查完成，可继续垂钓和收集。":"前往盐镜观测台，挑战领航员汐弦。";
 }
   function sitePanel(){
-  const site=activeSite(),d=T.siteList(s.region)[site],options=[];
+  const site=activeSite(),reeds=s.region==="cove";
+  const d=site==="cover"?{name:reeds?"湾畔芦荡":"原野高草",icon:"leaf",action:reeds?"调查潮草":"调查草丛",desc:"草叶间有灵兽活动的痕迹。穿行或调查这里，都有机会相遇。"}:T.siteList(s.region)[site],options=[];
   if(d)options.push(btn(d.action,"interact",site,"primary"));
   if(["lab","hut"].includes(site))options.push(btn("补给商店","shop"));
   if(s.badge&&["lab","beacon"].includes(site))options.push(btn("搭船去盐镜湾","sail"));
   if(site==="beacon"&&s.badge)options.push(btn("双打交流赛","pairStart"));
-  if(site==="pool"&&s.rod)options.push(btn("抛竿垂钓","fish"));
-  return `<section class="panel spot-panel"><div class="where">${icon(d?.icon||"compass")}<h2>${d?.name||"沿岸小径"}</h2></div><p>${d?.desc||"沿小径行进，或选择目的地自动前往。"}</p><div class="tools">${options.join("")||btn("查看行囊","bag")}</div></section>`;
+  if(atFishingBank()&&s.rod)options.push(btn("抛竿垂钓","fish"));
+  const title=d?.name||(reeds?"滨海滩地":"海岬原野");
+  const description=d?.desc||"脚下是平地，可以自由行走。成片的高草里栖息着野生灵兽。";
+  return `<section class="panel spot-panel"><div class="where">${icon(d?.icon||"compass")}<h2>${title}</h2></div><p>${description}</p><div class="tools">${options.join("")||btn("查看行囊","bag")}</div></section>`;
 }
   function weatherBadge(b){
   const w=b?.weather||F.ambient(s);
@@ -111,10 +122,41 @@ function runMistcape() {
   function world(){
   const places=T.siteList(s.region),region=s.region==="cove"?"盐镜湾":"雾岬海岸",lead=s.party.find(m=>m.hp>0)||s.party[0];
   return `<section class="wrap page field-page"><div class="page-title"><div><h1>${region}</h1><p>${nextGoal()}</p></div><div class="tools">${btn(icon("bag")+" 行囊","bag")}</div></div>
-  <div class="map-layout"><div><div class="game-window"><div class="instrument"><span>${icon("compass")} ${region}航图</span><span class="map-instruments">${weatherBadge()}<button data-do="camera" aria-pressed="${!!s.follow}" title="切换地图视角">${s.follow?"显示全图":"跟随 Levi"}</button></span></div><div class="map-viewport"><div class="map ${s.region}" id="map" role="group" aria-label="${region}可探索地图" tabindex="0">${Object.entries(places).map(([k,d])=>`<button class="map-pin ${k===activeSite()?"near":""}" style="left:${d.at[0]}%;--site-y:${d.at[1]}%" data-do="travel" data-arg="${k}" aria-label="前往${d.name}">${icon(d.icon)}${d.short}</button>`).join("")}<img class="walker" alt="Levi" draggable="false"></div></div><div class="world-strip"><span>${icon("award")} 徽章 ${Number(s.badge)+Number(s.secondBadge)} / 2</span><span>潮币 ${s.coins}</span></div></div>
+  <div class="map-layout"><div><div class="game-window"><div class="instrument"><span>${icon("compass")} ${region}航图</span><span class="map-instruments">${weatherBadge()}<button data-do="camera" aria-pressed="${!!s.follow}" title="切换地图视角">${s.follow?"显示全图":"跟随 Levi"}</button></span></div><div class="map-viewport"><div class="map ${s.region}" id="map" role="group" aria-label="${region}可探索地图" tabindex="0"><canvas class="field-cover" width="1200" height="800" aria-hidden="true"></canvas>${Object.entries(places).map(([k,d])=>`<button class="map-pin ${k===T.near(s.pos,s.region)?"near":""}" style="left:${d.at[0]}%;--site-y:${d.at[1]}%" data-do="travel" data-arg="${k}" aria-label="前往${d.name}">${icon(d.icon)}${d.short}</button>`).join("")}<img class="walker" alt="Levi" draggable="false"><i class="foot-grass" hidden aria-hidden="true"></i></div></div><div class="world-strip"><span class="ground-name"></span><span>${icon("award")} 徽章 ${Number(s.badge)+Number(s.secondBadge)} / 2</span><span>潮币 ${s.coins}</span></div></div>
   <div class="touch-pad">${[["left","←"],["up","↑"],["down","↓"],["right","→"]].map(([k,n])=>`<button data-do="step" data-arg="${k}" aria-label="移动 ${n}">${n}</button>`).join("")}</div><p class="brief">${icon("book")}<span>${journalHTML(s.notice)}</span></p></div>
   <aside class="map-side"><div id="spot">${sitePanel()}</div><section class="panel"><h2>沿途地点</h2><div class="jump-list">${Object.entries(places).map(([k,d])=>`<button class="jump" data-do="travel" data-arg="${k}"><span class="jump-label">${icon(d.icon)}${d.name}</span>${icon("chevron")}</button>`).join("")}</div></section><button class="field-lead" data-do="detail" data-arg="${s.party.indexOf(lead)}">${art(lead.kind)}<span><small>当前首发 · Lv.${lead.level}</small><b>${species[lead.kind].name}</b>${hp(lead)}</span></button></aside></div></section>`;
 }
+  function drawGrass(canvas,region){
+    const grass=new Image();
+    grass.onload=()=>{
+      if(!canvas.isConnected)return;
+      const ctx=canvas.getContext("2d");
+      const unit=canvas.width/T.W,cells=T.grassCells(region);
+      ctx.save();
+      ctx.filter="blur(2px)";
+      ctx.fillStyle=region==="cove"?"#37745270":"#28654180";
+      ctx.beginPath();
+      for(const {x,y} of cells){
+        ctx.moveTo((x+.75)*unit,y*unit);
+        ctx.ellipse(x*unit,y*unit,.75*unit,.65*unit,0,0,Math.PI*2);
+      }
+      ctx.fill();ctx.restore();
+      for(const pos of cells){
+        // Stable variation keeps adjoining blades irregular when the map is reopened.
+        const seed=(pos.x*73856093 ^ pos.y*19349663)>>>0;
+        const x=(pos.x+((seed%13)-6)/32)*unit;
+        const y=(pos.y+.38+((seed%7)-3)/36)*unit;
+        const width=(1.35+(seed%19)/55)*unit;
+        const height=width*grass.naturalHeight/grass.naturalWidth;
+        ctx.save();ctx.translate(x,y);
+        if(seed%2)ctx.scale(-1,1);
+        ctx.drawImage(grass,-width*.68,-height*1.13,width*.74,height*.8);
+        ctx.drawImage(grass,-width/2,-height,width,height);
+        ctx.restore();
+      }
+    };
+    grass.src="assets/color/"+(region==="cove"?"reeds":"grass")+".webp";
+  }
   function paintWalker(walker) {
     const side=facing==="right"?"left":facing;
     const source=`assets/color/levi-${side}${stride}.webp`;
@@ -126,11 +168,17 @@ function runMistcape() {
     paintWalker(walker);
     $(".instrument .weather-tag").outerHTML=weatherBadge();
     const [x,y]=T.toPct(s.pos);walker.style.left=x+"%";walker.style.top=y+"%";
+    const inGrass=T.tallGrass(s.pos,s.region),fringe=$(".foot-grass");
+    fringe.hidden=!inGrass;fringe.style.left=x+"%";fringe.style.top=y+"%";
+    const surface=$(".ground-name");
+    surface.classList.toggle("in-grass",inGrass);
+    surface.textContent=inGrass?(s.region==="cove"?"芦荡 · 可能遇敌":"高草 · 可能遇敌"):"平地 · 安全";
     const zoom=s.follow?1.85:1;
     const pan=v=>Math.min((zoom-1)*100,Math.max(0,v*zoom-50));
     $("#map").style.transform="translate("+(-pan(x))+"%,"+(-pan(y))+"%) scale("+zoom+")";
-    $("#spot").innerHTML=sitePanel();
-    document.querySelectorAll(".map-pin").forEach(b=>b.classList.toggle("near",b.dataset.arg===activeSite()));
+    const spot=sitePanel();
+    if(spot!==previousSpot){$("#spot").innerHTML=spot;previousSpot=spot;}
+    document.querySelectorAll(".map-pin").forEach(b=>b.classList.toggle("near",b.dataset.arg===T.near(s.pos,s.region)));
     hints();
   }
   function meter(m,cls){
@@ -181,7 +229,7 @@ function runMistcape() {
   }
   function render(){
     syncMusic();head();$("#screen").innerHTML=tab==="team"?members():tab==="dex"?dex():!s.starter?opening():s.battle?battles():world();
-    if(tab==="adventure"&&s.starter&&!s.battle) syncMap();hints();
+    if(tab==="adventure"&&s.starter&&!s.battle){drawGrass($(".field-cover"),s.region);syncMap();}hints();
   }
   function closeDialog(){clearTimeout(fishTimer);fishReady=false;if($("#dialog").open) $("#dialog").close();}
   function modal(title,contents){
@@ -202,7 +250,10 @@ function runMistcape() {
     return true;
   }
   function go(dest,site){
-    stopWalk();const path=T.route(s.pos,dest,s.region);if(!path){toast("前方没有小径，请沿草地或小路行走。");return;}
+    stopWalk();
+    const target=site?dest:T.nearestGround(dest,s.region,1,s.pos);
+    const path=T.route(s.pos,target,s.region);
+    if(!path){toast("这里无法落脚，请选择附近的陆地。");return;}
     const arrive=()=>{stopWalk();if(site){toast("已抵达"+T.siteList(s.region)[site].name);$("#spot .btn")?.focus({preventScroll:true});}};
     if(!path.length){arrive();return;}
     let i=0;walkTimer=setInterval(()=>{if(s.battle||tab!=="adventure"){stopWalk();return;}if(!takeStep(path[i++])){stopWalk();return;}if(!s.battle&&i===path.length)arrive();},75);
@@ -216,7 +267,7 @@ function runMistcape() {
   }else if(k==="dock"){G.sail(s);}
   else if(k==="beacon"&&!s.camp){s.notice="岑川指向北边的练习场：「先让青禾看看你们的默契吧。」";toast("先完成巡林员的切磋");}
   else if(k==="dome"&&!G.canDuel(s)){s.notice="汐弦需要一份本地观察记录。去浅滩结缘瓦当蟹、桂月蛾或潮钟螺。";toast("先结缘一只盐镜湾本地伙伴");}
-  else {G.encounter(s,["grass","pool"].includes(k)?"wild":k);beep(570,true);}
+  else {G.encounter(s,["grass","pool","cover"].includes(k)?"wild":k);beep(570,true);}
   save();render();
 }
   const itemIcon=id=>`<img class="item-art" src="assets/color/item-${id}.webp" alt="">`;
@@ -253,7 +304,7 @@ function runMistcape() {
   <div class="dialog-foot tools">${btn("更换携带物","equipment",i,"",!manage)}${btn("整备招式","dojo",i,"",!manage||!atDesk)}${btn("返回","close")}</div>${!atDesk?"<p class='note dialog-foot'>在雾岬研究站或潮汐小屋可以整备招式。</p>":""}`);
 }
   function cast(){
-  if(s.battle||!s.rod||activeSite()!=="pool")return;
+  if(s.battle||!s.rod||!atFishingBank())return;
   clearTimeout(fishTimer);fishReady=false;
   modal("潮声浅滩 · 垂钓",`<div class="float-scene"><i></i></div><p id="bite" role="status">浮标随波摇晃，稍等片刻……</p><div class="dialog-foot">${btn("提竿","hook","","primary",true)}</div>`);
   fishTimer=setTimeout(()=>{
@@ -280,7 +331,27 @@ function runMistcape() {
     if(action==="bell")pulse(".fighter.foe",[{filter:"brightness(1)"},{filter:"brightness(1.65)"},{filter:"brightness(1)"}],420);
   }
   const dir={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
-  function manual(k){if(!s.starter||s.battle||tab!=="adventure")return;stopWalk();const [x,y]=dir[k];takeStep({x:s.pos.x+x,y:s.pos.y+y});}
+  function fieldOpen(){return s.starter&&!s.battle&&tab==="adventure"&&!$("#dialog").open;}
+  function moveDirection(k){
+    const [dx,dy]=dir[k];
+    return takeStep({x:s.pos.x+dx,y:s.pos.y+dy});
+  }
+  function advanceHeld(){
+    if(!fieldOpen()){stopWalk();return;}
+    const ordered=[...heldDirections.values()].reverse();
+    for(const k of ordered)if(moveDirection(k))return;
+    if(ordered.length&&facing!==ordered[0]){facing=ordered[0];paintWalker($(".walker"));}
+  }
+  function pressDirection(source,k){
+    if(!fieldOpen()||heldDirections.has(source))return;
+    const first=heldDirections.size===0;
+    if(first)stopWalk();
+    heldDirections.set(source,k);
+    if(first){walkTimer=setInterval(advanceHeld,100);advanceHeld();}
+  }
+  function releaseDirection(source){
+    if(heldDirections.delete(source)&&!heldDirections.size)stopWalk();
+  }
   function action(op,arg){
     switch(op){
       case "select":choose(arg);break;
@@ -288,7 +359,7 @@ function runMistcape() {
       case "tab":changeTab(arg);break;
       case "sound":s.sound=!s.sound;save();head();hints();syncMusic();beep(660);toast(s.sound?"音乐和音效已开启":"声音已关闭");break;
       case "travel":go(T.toGrid(T.siteList(s.region)[arg].at),arg);break;
-      case "step":manual(arg);break;
+      case "step":if(fieldOpen()){stopWalk();moveDirection(arg);}break;
       case "interact":interact(arg||activeSite());break;
       case "camera":s.follow=!s.follow;stopWalk();save();render();break;
       case "bag":itemBag();break;
@@ -309,7 +380,7 @@ function runMistcape() {
       case "learn":{const [i,id,j]=arg.split(",");if(["lab","hut"].includes(activeSite())&&F.teach(s,Number(i),id,Number(j))){save();render();detail(Number(i));}break;}
       case "sail":if(G.sail(s)){stopWalk();save();render();beep(480,true);}break;
       case "fish":cast();break;
-      case "hook":if(fishReady&&activeSite()==="pool"&&G.encounter(s,"fish")){fishReady=false;closeDialog();save();render();}break;
+      case "hook":if(fishReady&&atFishingBank()&&G.encounter(s,"fish")){fishReady=false;closeDialog();save();render();}break;
       case "close":closeDialog();break;
       case "detail":detail(Number(arg));break;
       case "lead":if(!s.battle&&s.party[arg]?.hp){[s.party[0],s.party[arg]]=[s.party[arg],s.party[0]];save();render();}break;
@@ -339,10 +410,22 @@ function runMistcape() {
     }
   }
   document.addEventListener("pointerdown",syncMusic);
+  document.addEventListener("pointerdown",e=>{
+    const button=e.target.closest('[data-do="step"]');
+    if(!button||e.button!==0||!fieldOpen())return;
+    e.preventDefault();button.setPointerCapture(e.pointerId);
+    pressDirection("pointer"+e.pointerId,button.dataset.arg);
+  });
+  for(const type of ["pointerup","pointercancel","lostpointercapture"]){
+    document.addEventListener(type,e=>releaseDirection("pointer"+e.pointerId));
+  }
   document.addEventListener("keydown",syncMusic);
   document.addEventListener("click",e=>{
     const button=e.target.closest("[data-do]");
-    if(button&&!button.disabled){action(button.dataset.do,button.dataset.arg);return;}
+    if(button&&!button.disabled){
+      if(button.dataset.do!=="step"||e.detail===0)action(button.dataset.do,button.dataset.arg);
+      return;
+    }
     const map=e.target.closest("#map");if(map){const r=map.getBoundingClientRect();go(T.toGrid([(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100]));}
     if(e.target===$("#dialog")){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();}
   });
@@ -367,9 +450,12 @@ function runMistcape() {
       if(!e.repeat&&/^[1-4]$/.test(k)) document.querySelectorAll(".move")[Number(k)-1]?.click();
     } else {
       const keys={w:"up",s:"down",a:"left",d:"right",arrowup:"up",arrowdown:"down",arrowleft:"left",arrowright:"right"};
-      if(keys[k]){e.preventDefault();manual(keys[k]);}else if(k==="e"&&!e.repeat){e.preventDefault();interact();}
+      if(keys[k]){e.preventDefault();if(!e.repeat)pressDirection(k,keys[k]);}
+      else if(k==="e"&&!e.repeat){e.preventDefault();interact();}
     }
   });
+  document.addEventListener("keyup",e=>releaseDirection(e.key.toLowerCase()));
+  window.addEventListener("blur",stopWalk);
   document.addEventListener("visibilitychange",()=>{if(document.hidden)stopWalk();syncMusic();});
   if(loaded)save();render();if(saveError)toast("本地存档暂不可读，当前会话仍可游玩。");
 }
