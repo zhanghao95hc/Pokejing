@@ -50,6 +50,12 @@ const MistGame = (() => {
     }
     if(mon.level===50) mon.xp=0;
   }
+  function awardExperience(s,index,amount){
+    const mon=s.party[index],from=mon.kind;
+    gain(mon,amount,s.battle.lines);
+    if(mon.kind!==from)(s.pendingEvolutions??=[]).push(from);
+    record(s.caught,mon.kind);record(s.seen,mon.kind);
+  }
   const stages=()=>({attack:0,guard:0,speed:0,special:0});
   const localKinds=["crab","moth","snail"];
   function sail(s){
@@ -121,8 +127,8 @@ const MistGame = (() => {
     const lines=b.lines;
     const [title,type,power,accuracy,,,effect]=moves[id];
     const prefix=name(a)+"使出「"+title+"」";
-    if(tm.shield&&(power||effect==="sleep"||effect==="weaken")){lines.push(name(t)+"的护幕挡住了「"+title+"」。");return;}
-    if(rng()*100>=accuracy) {lines.push(prefix+"，被躲开了。");return;}
+    if(tm.shield&&(power||effect==="sleep"||effect==="weaken")){lines.push(name(t)+"的护幕挡住了「"+title+"」。");return "blocked";}
+    if(rng()*100>=accuracy) {lines.push(prefix+"，被躲开了。");return "miss";}
     if(!power) {
       if(effect==="protect"){
         const chain=am.protectChain||0;am.shield=chain===0||rng()<.5**chain;am.protectChain=am.shield?chain+1:0;
@@ -137,11 +143,11 @@ const MistGame = (() => {
         const old=tm.attack;tm.attack=clamp(old-1,-6,6);
         lines.push(prefix+(old===tm.attack?"，对手的攻击已到下限。":"，对手的攻击下降了。"));
       }
-      return;
+      return effect==="protect"&&!am.shield?"failed":"status";
     }
     if(F.ability(t)==="coil"&&type==="volt"){
       t.hp=Math.min(stat(t,0),t.hp+Math.max(1,Math.floor(stat(t,0)/4)));
-      lines.push(prefix+"，"+name(t)+"以蓄流吸收了电能。");return;
+      lines.push(prefix+"，"+name(t)+"以蓄流吸收了电能。");return "absorb";
     }
     const phys=["plain","rock","air"].includes(type),mult=C.effectiveness(type,t.kind);
     const crit=rng()<1/16&&F.ability(t)!=="shell";
@@ -156,15 +162,27 @@ const MistGame = (() => {
     lines.push(prefix+"，造成 "+lost+" 点伤害。"+(mult>1?"属性克制！":mult<1?"效果较弱。":"")+(crit?"命中要害！":""));
     if(effect==="drain"){a.hp=Math.min(stat(a,0),a.hp+Math.max(1,Math.floor(lost/2)));lines.push(name(a)+"汲取露水恢复了体力。");}
     if(effect==="recoil") a.hp=Math.max(0,a.hp-Math.max(1,Math.floor(stat(a,0)/6)));
-    if(t.hp<=0) return;
+    if(t.hp<=0) return "hit";
     if(effect==="slow"&&rng()<.4) {tm.speed=clamp(tm.speed-1,-6,6);lines.push(name(t)+"的速度下降了。");}
     if(!t.status && effect==="burn" && species[t.kind].type!=="fire" && rng()<.18){t.status="burn";lines.push(name(t)+"陷入灼伤。");}
     if(!t.status && effect==="para" && species[t.kind].type!=="volt" && rng()<.22){t.status="para";lines.push(name(t)+"陷入麻痹。");}
     if(!t.status&&effect==="poison"&&rng()<.35){t.status="poison";lines.push(name(t)+"中毒了。");}
     F.triggerHeld(t,lines);F.triggerHeld(a,lines);
+    return "hit";
   }
-  function attack(a,t,id,am,tm,b,rng){
-    if(beforeMove(a,id,am,b.lines,rng))resolveHit(a,t,id,am,tm,b,rng);
+  const seat=(key,mon,mods)=>({key,mon,mods});
+  function snapshot({key,mon}){
+    return {key,kind:mon.kind,hp:mon.hp,max:stat(mon,0),level:mon.level,status:mon.status};
+  }
+  function attack(source,targets,id,b,rng,events){
+    if(!beforeMove(source.mon,id,source.mods,b.lines,rng))return;
+    const event=events&&{move:id,source:snapshot(source),hits:[]};
+    for(const target of targets){
+      const before=event&&snapshot(target);
+      const outcome=resolveHit(source.mon,target.mon,id,source.mods,target.mods,b,rng,targets.length>1?.75:1);
+      if(event)event.hits.push({before,after:snapshot(target),outcome});
+    }
+    if(event){event.after=snapshot(source);events.push(event);}
   }
   function exchange(s,index) {
     const b=s.battle;
@@ -178,8 +196,7 @@ const MistGame = (() => {
       const living=b.participants.filter(i=>s.party[i].hp>0);
       for(const i of living) {
         F.growth(s.party[i],enemy);
-        gain(s.party[i],Math.ceil((enemy.level*(b.mode==="wild"?7:11)+6)/living.length),b.lines);
-        record(s.caught,s.party[i].kind);record(s.seen,s.party[i].kind);
+        awardExperience(s,i,Math.ceil((enemy.level*(b.mode==="wild"?7:11)+6)/living.length));
       }
     }
     if(!s.party.some(m=>m.hp>0)) {
@@ -201,7 +218,7 @@ const MistGame = (() => {
     if(!s.party[b.lead].hp) b.lines.push("请选择下一位出战伙伴。");
     b.round++;
   }
-  function act(s,action,arg,rng=Math.random) {
+  function act(s,action,arg,rng=Math.random,events) {
     const b=s.battle;if(!b||b.result||b.mode==="pair") return false;
     let ally=s.party[b.lead];const foe=b.rivals[b.foe],forced=ally.hp<=0;
     if(forced && action!=="switch") return false;
@@ -235,12 +252,13 @@ const MistGame = (() => {
       } else b.lines.push("铃声消散了。削弱对手后再试一次。");
     }
     if(!b.result&&!forced) {
-      const ai=chooseAI(foe,rng,ally,b,b.foeStage), opponent=()=>attack(foe,ally,ai,b.foeStage,b.playerStage,b,rng);
+      const playerSeat=seat("ally0",ally,b.playerStage),foeSeat=seat("foe0",foe,b.foeStage);
+      const ai=chooseAI(foe,rng,ally,b,b.foeStage),opponent=()=>attack(foeSeat,[playerSeat],ai,b,rng,events);
       if(action==="move") {
         const orderPriority=priority(arg)-priority(ai);
         const diff=speed(ally,b.playerStage,b)-speed(foe,b.foeStage,b);
         const first=orderPriority?orderPriority>0:(diff?diff>0:rng()<.5);
-        const player=()=>attack(ally,foe,arg,b.playerStage,b.foeStage,b,rng);
+        const player=()=>attack(playerSeat,[foeSeat],arg,b,rng,events);
         const order=first?[player,opponent]:[opponent,player];
         for(const fn of order) if(ally.hp>0&&foe.hp>0) fn();
       } else opponent();
@@ -265,7 +283,7 @@ const MistGame = (() => {
     const list=m.skills.filter(sk=>sk.pp>0).map(sk=>sk.id);
     return list.length?list:["strain"];
   }
-  function pairRound(s,orders,rng=Math.random) {
+  function pairRound(s,orders,rng=Math.random,events) {
     const b=s.battle;if(!b||b.mode!=="pair"||b.result||!Array.isArray(orders)) return false;
     if(orders.length!==b.allies.length)return false;
     const incoming=new Set(),cost={salves:0,tonic:0};
@@ -309,12 +327,10 @@ const MistGame = (() => {
       const intended=turn.isAlly?turn.target:(replacements.get(turn.target)??turn.target);
       const target=targets[intended].hp>0?intended:eligible.find(i=>targets[i].hp>0);
       if(target===undefined) continue;
-      if(!beforeMove(turn.actor,turn.move,turn.mods,b.lines,rng))continue;
       const hits=moves[turn.move][6]==="spread"?eligible.filter(i=>targets[i].hp>0):[target];
-      for(const i of hits){
-        const mods=turn.isAlly?b.modF[i]:b.modA[i];
-        resolveHit(turn.actor,targets[i],turn.move,turn.mods,mods,b,rng,hits.length>1?.75:1);
-      }
+      const source=seat(turn.isAlly?"ally"+b.allies.indexOf(turn.index):"foe"+turn.index,turn.actor,turn.mods);
+      const seats=hits.map(i=>turn.isAlly?seat("foe"+i,targets[i],b.modF[i]):seat("ally"+b.allies.indexOf(i),targets[i],b.modA[i]));
+      attack(source,seats,turn.move,b,rng,events);
     }
     for(const mon of [...b.allies.map(i=>s.party[i]),...b.rivals]){
       F.residual(mon,b.lines);
@@ -330,7 +346,7 @@ const MistGame = (() => {
     else if(!b.rivals.some(m=>m.hp>0)){
       b.result="win";s.pairWon=true;s.coins+=50;b.lines.push("Levi 赢下了灯台双打交流赛，获得 50 枚潮币！");
       const living=b.participants.filter(i=>s.party[i].hp>0);
-      for(const i of living){for(const foe of b.rivals)F.growth(s.party[i],foe);gain(s.party[i],Math.ceil(160/living.length),b.lines);record(s.seen,s.party[i].kind);record(s.caught,s.party[i].kind);}
+      for(const i of living){for(const foe of b.rivals)F.growth(s.party[i],foe);awardExperience(s,i,Math.ceil(160/living.length));}
     } else b.round++;
     b.history=b.history.concat(b.lines).slice(-80);return true;
   }

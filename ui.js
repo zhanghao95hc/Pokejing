@@ -301,7 +301,7 @@ function runMistcape() {
   <table class="stat-table"><thead><tr><th>能力</th><th>数值</th><th>个体值</th><th>努力值</th></tr></thead><tbody>${F.labels.map((n,j)=>`<tr><th>${n}</th><td>${G.stat(m,j)}</td><td>${m.iv[j]}</td><td>${m.ev[j]}</td></tr>`).join("")}</tbody></table>
   <p class="note">累计努力值 ${m.ev.reduce((a,b)=>a+b,0)} / 510${C.evolutions[m.kind]?"　·　Lv.9 进化":""}</p>
   ${m.skills.map(sk=>`<div class="dialog-row"><div><b>${moves[sk.id][0]}</b><p class="note">${moveInfo(sk.id)}</p></div><small>PP ${sk.pp}</small></div>`).join("")}
-  <div class="dialog-foot tools">${btn("更换携带物","equipment",i,"",!manage)}${btn("整备招式","dojo",i,"",!manage||!atDesk)}${btn("返回","close")}</div>${!atDesk?"<p class='note dialog-foot'>在雾岬研究站或潮汐小屋可以整备招式。</p>":""}`);
+  <div class="dialog-foot tools">${btn("更换携带物","equipment",i,"",!manage)}${btn("整备招式","dojo",i,"",!manage||!atDesk)}${Object.values(C.evolutions).includes(m.kind)?btn("重看进化","replayEvolution",i):""}${btn("返回","close")}</div>${!atDesk?"<p class='note dialog-foot'>在雾岬研究站或潮汐小屋可以整备招式。</p>":""}`);
 }
   function cast(){
   if(s.battle||!s.rod||!atFishingBank())return;
@@ -315,20 +315,35 @@ function runMistcape() {
   function teamDialog(mode){
     modal(mode==="switch"?"选择出战伙伴":"选择交换队员",s.party.map((m,i)=>`<div class="dialog-row"><div class="inline">${art(m.kind)}<div><b>${species[m.kind].name}</b><p class="note">Lv.${m.level} · HP ${m.hp}/${G.stat(m,0)}</p></div></div>${btn(mode==="switch"?"出战":"交换",mode,i,"",mode==="switch"&&(!m.hp||s.battle.lead===i))}</div>`).join(""));
   }
+  let presenting=false;
+  async function showEvolutions(replay){
+    if(presenting||(!replay&&!s.pendingEvolutions?.length))return;
+    presenting=true;
+    try{
+      if(replay){await MistTheater.evolution(replay);return;}
+      while(s.pendingEvolutions?.length){
+        const from=s.pendingEvolutions[0];
+        if(Object.hasOwn(C.evolutions,from))await MistTheater.evolution(from);
+        s.pendingEvolutions.shift();
+        if(!s.pendingEvolutions.length)delete s.pendingEvolutions;
+        save();
+      }
+    }catch{toast("进化画面未能加载，伙伴进度已保留。");}
+    finally{presenting=false;}
+  }
+  async function presentRound(events,action){
+    presenting=true;closeDialog();save();beep(s.battle.result?632:330,!!s.battle.result);
+    $("#top").inert=true;
+    try{await MistTheater.turn($(".arena"),events);}
+    catch{toast("招式画面未能加载，本回合已结算。");}
+    finally{$("#top").inert=false;presenting=false;render();}
+    if(action==="bell"&&!matchMedia("(prefers-reduced-motion: reduce)").matches)
+      $(".fighter.foe")?.animate([{filter:"brightness(1)"},{filter:"brightness(1.5)"},{filter:"brightness(1)"}],320);
+    await showEvolutions();
+  }
   function battleAct(action,arg){
-    const before=s.battle,active=s.party[before.lead],rival=before.rivals[before.foe];
-    const hpA=active.hp,hpF=rival.hp;
-    if(!G.act(s,action,arg)) return;
-    closeDialog();beep(s.battle.result?632:330,!!s.battle.result);save();render();
-    if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    function pulse(selector,frames,time,delay=0){
-      $(selector)?.animate(frames,{duration:time,delay,easing:"ease-out"});
-    }
-    if(action==="move")pulse(".fighter.ally",[{translate:"0 0"},{translate:"15px -4px"},{translate:"0 0"}],240);
-    if(rival.hp<hpF&&rival===before.rivals[before.foe])
-      pulse(".fighter.foe",[{opacity:1},{opacity:.4,translate:"7px -2px"},{opacity:1}],220,90);
-    if(active.hp<hpA)pulse(".meter.own",[{translate:"0"},{translate:"-4px"},{translate:"4px"},{translate:"0"}],180,180);
-    if(action==="bell")pulse(".fighter.foe",[{filter:"brightness(1)"},{filter:"brightness(1.65)"},{filter:"brightness(1)"}],420);
+    const events=[];
+    if(G.act(s,action,arg,Math.random,events))presentRound(events,action);
   }
   const dir={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
   function fieldOpen(){return s.starter&&!s.battle&&tab==="adventure"&&!$("#dialog").open;}
@@ -353,6 +368,7 @@ function runMistcape() {
     if(heldDirections.delete(source)&&!heldDirections.size)stopWalk();
   }
   function action(op,arg){
+    if(presenting)return;
     switch(op){
       case "select":choose(arg);break;
       case "depart":if(G.start(s,selected)){beep(523,true);save();render();window.scrollTo(0,0);}break;
@@ -383,6 +399,11 @@ function runMistcape() {
       case "hook":if(fishReady&&atFishingBank()&&G.encounter(s,"fish")){fishReady=false;closeDialog();save();render();}break;
       case "close":closeDialog();break;
       case "detail":detail(Number(arg));break;
+      case "replayEvolution":{
+        const from=C.starters.find(k=>C.evolutions[k]===s.party[Number(arg)]?.kind);
+        if(from){closeDialog();showEvolutions(from).then(()=>detail(Number(arg)));}
+        break;
+      }
       case "lead":if(!s.battle&&s.party[arg]?.hp){[s.party[0],s.party[arg]]=[s.party[arg],s.party[0]];save();render();}break;
       case "move":case "tonic":case "bell":case "salve":case "run":battleAct(op,arg);break;
       case "switch":battleAct(op,Number(arg));break;
@@ -398,7 +419,8 @@ function runMistcape() {
           if(move==="salves"||move==="tonic")return {action:move};
           return {move,target:Number($("#duo-target-"+j).value)};
         });
-        if(G.pairRound(s,orders)){save();beep(450,!!s.battle.result);render();}else toast("请选不同的替补，并确认道具数量足够。");
+        const events=[];
+        if(G.pairRound(s,orders,Math.random,events))presentRound(events);else toast("请选不同的替补，并确认道具数量足够。");
         break;
       }
       case "history":modal("战斗记录",`<ul class="battle-log">${s.battle.history.map(l=>`<li>${journalHTML(l)}</li>`).join("")}</ul>`);break;
@@ -438,7 +460,7 @@ function runMistcape() {
     target.setAttribute("title",fixedTarget?"此指令自动确定作用对象":"选择对手");
   });
   document.addEventListener("keydown",e=>{
-    if(e.altKey||e.ctrlKey||e.metaKey||$("#dialog").open)return;
+    if(presenting||e.altKey||e.ctrlKey||e.metaKey||$("#dialog").open)return;
     if(e.key==="Escape"&&tab!=="adventure"){changeTab("adventure");return;}
     if(tab!=="adventure")return;
     const k=e.key.toLowerCase();
@@ -458,5 +480,6 @@ function runMistcape() {
   window.addEventListener("blur",stopWalk);
   document.addEventListener("visibilitychange",()=>{if(document.hidden)stopWalk();syncMusic();});
   if(loaded)save();render();if(saveError)toast("本地存档暂不可读，当前会话仍可游玩。");
+  showEvolutions();
 }
 runMistcape();
