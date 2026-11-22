@@ -6,7 +6,7 @@ const MistTrail = (() => {
   const sites={
     lab:{name:"雾岬研究站",short:"研究站",icon:"home",at:[16.5,67],action:"休整补给",desc:"恢复全队体力和招式次数，补足结缘铃与药膏。"},
     grass:{name:"风铃草甸",short:"草甸",icon:"leaf",at:[37,63],action:"调查草丛",desc:"草叶正在轻轻摇晃，压低野生伙伴的体力后更容易结缘。"},
-    camp:{name:"林间练习场",short:"练习场",icon:"flag",at:[53,26],action:"切磋对战",desc:"巡林员青禾在这里等候新搭档。战胜她即可挑战灯台。"},
+    camp:{name:"林间练习场",short:"练习场",icon:"flag",at:[53,26],action:"切磋对战",desc:"巡林员青禾在这里等候新搭档。战胜她可从营地上栖风岭，为晚归的渡船修好引灯。"},
     beacon:{name:"望潮灯台",short:"灯台",icon:"sun",at:[82,33],action:"挑战守灯人",desc:"守灯人岑川带着两位搭档，守护着雾岬的第一枚徽章。"}
   };
   const toGrid=([x,y])=>({x:Math.round(x*W/100),y:Math.round(y*H/100)});
@@ -14,9 +14,22 @@ const MistTrail = (() => {
     dock:{name:"盐镜渡口",short:"渡口",icon:"compass",at:[16,78],action:"返回雾岬",desc:"沿航线返回研究站，队伍和调查记录会一起带回。"},
     pool:{name:"潮声浅滩",short:"浅滩",icon:"drop",at:[55,78],action:"调查潮草",desc:"瓦当蟹和桂月蛾出没于潮草间。有钓竿时，也可以调查水下的伙伴。"},
     hut:{name:"潮汐小屋",short:"渔舍",icon:"home",at:[47,36],action:"拜访渔舍",desc:"守潮人提供休整与钓具，屋内的补给所接受潮币。"},
-    dome:{name:"盐镜观测台",short:"观测台",icon:"star",at:[82,36],action:"挑战潮汐领航员",desc:"记录任意一只盐镜湾的本地伙伴后，在此挑战领航员汐弦。"}
+    dome:{name:"盐镜观测台",short:"观测台",icon:"star",at:[82,36],action:"挑战潮汐领航员",desc:"找回鸣沙泽的引航钟声，带一份本地灵兽的结缘记录来挑战汐弦。"}
   };
-  const siteList=region=>region==="cove"?coveSites:sites;
+  const ridgeSites={
+    pass:{name:"松关栈门",short:"栈门",icon:"compass",at:[15,80],action:"返回林间练习场",desc:"越过栈门便是青禾的营地。显眼的朱绳标着返程的路。"},
+    rack:{name:"听风竹架",short:"竹架",icon:"feather",at:[43,25],action:"听竹管辨风",desc:"长短竹管依次悬起，架脚的红枝被风吹得偏向一边。"},
+    lantern:{name:"石龛引灯",short:"引灯",icon:"sun",at:[79,31],action:"查看灯窗",desc:"石龛有两扇转窗。天黑前，渡工要从海上看见这里和灯台的两点灯火。"},
+    nest:{name:"背风松坡",short:"松坡",icon:"leaf",at:[31,52],action:"循着扫痕找灵兽",desc:"松针之间留着细细的扫痕。蹲下顺着它走，有时能看见绒尾狸替衔枝雀清理鸟巢。"}
+  };
+  const marshSites={
+    landing:{name:"芦汀旧埠",short:"旧埠",icon:"compass",at:[16,75],action:"返回潮汐小屋",desc:"踏着芦根间的小径，可以绕回守潮人的渔舍。"},
+    gauge:{name:"双柱潮尺",short:"潮尺",icon:"drop",at:[42,26],action:"拓下潮尺刻纹",desc:"两根石柱间有鳞光闪动，石身上的旧潮痕还露在水面上。"},
+    gong:{name:"回澜钟架",short:"潮钟",icon:"sun",at:[80,29],action:"查看引航钟",desc:"铜钟的余音绕泽一圈才散。引航人曾用长短不同的钟声为夜船报潮。"},
+    inlet:{name:"归鳍汊口",short:"汊口",icon:"drop",at:[63,66],action:"沿鳍影探查",desc:"灯鳍苗聚在两股水流交会处。偶尔有白额潮獭从芦根下探出脑袋。"}
+  };
+  const areas={coast:{name:"雾岬海岸",sites},cove:{name:"盐镜湾",sites:coveSites},ridge:{name:"栖风岭",sites:ridgeSites},marsh:{name:"鸣沙泽",sites:marshSites}};
+  const siteList=region=>areas[region].sites;
   const toPct=p=>[p.x*100/W,p.y*100/H];
   const spawn=toGrid(sites.lab.at);
   const terrainShapes={
@@ -50,6 +63,16 @@ const MistTrail = (() => {
         [[48,72],[55,70],[64,71],[66,75],[61,79],[54,81],[48,79]]
       ]
     }
+  };
+  terrainShapes.ridge={
+    land:[[5,56],[12,47],[15,30],[25,23],[32,21],[36,15],[51,14],[59,10],[68,11],[74,22],[79,23],[85,26],[88,32],[95,40],[94,50],[87,54],[82,65],[77,68],[74,78],[61,83],[47,88],[37,92],[22,87],[15,84],[7,86],[6,77],[3,68]],
+    obstacles:[[[31,13],[48,10],[49,18],[36,25],[33,21]],[[74,21],[80,19],[83,27],[78,29],[74,27]]],
+    grass:[[[18,44],[27,38],[33,43],[31,51],[22,52]],[[47,30],[58,26],[65,31],[62,38],[51,38]],[[44,64],[52,59],[61,63],[59,70],[46,73]],[[72,39],[81,36],[84,44],[79,49],[72,48]]]
+  };
+  terrainShapes.marsh={
+    land:[[4,47],[12,38],[17,27],[27,23],[33,17],[42,19],[49,16],[54,20],[65,15],[71,18],[83,17],[90,22],[93,34],[98,40],[97,55],[91,61],[87,70],[93,77],[81,80],[77,86],[61,85],[55,91],[45,90],[39,85],[25,83],[18,78],[10,83],[4,78],[5,70],[8,64],[4,55]],
+    obstacles:[[[39,14],[45,12],[45,20],[40,23]],[[75,14],[87,15],[87,24],[75,25]],[[6,61],[16,58],[18,66],[7,69]]],
+    grass:[[[20,36],[31,33],[36,38],[32,44],[23,45]],[[48,48],[56,43],[64,47],[64,54],[53,56]],[[70,33],[80,32],[86,38],[81,44],[73,42]],[[31,64],[39,62],[45,70],[40,76],[30,72]]]
   };
   function contains(vertices,x,y){
     let inside=false;
@@ -120,6 +143,6 @@ const MistTrail = (() => {
     const [x,y]=toPct(pos),available=siteList(region);
     return Object.keys(available).find(k=>Math.hypot(x-available[k].at[0],(y-available[k].at[1])*2/3)<4.1);
   }
-  return {W,H,sites,coveSites,siteList,spawn,toGrid,toPct,walkable,tallGrass,grassCells,nearestGround,route,near};
+  return {W,H,sites,coveSites,areas,siteList,spawn,toGrid,toPct,walkable,tallGrass,grassCells,nearestGround,route,near};
 })();
 if(typeof module!=="undefined")module.exports=MistTrail;

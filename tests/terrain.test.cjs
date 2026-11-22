@@ -66,3 +66,18 @@ test("点击紧邻障碍时可选本侧落脚点，深水仍然拒绝",()=>{
   assert.deepEqual(T.nearestGround({x:10,y:26},"coast",1,T.spawn),T.spawn);
   assert.equal(T.nearestGround(T.toGrid([98,95]),"coast",1,T.spawn),null);
 });
+
+for(const [region,gate] of [["ridge","pass"],["marsh","landing"]]){
+  test(region+" 新区域无孤立地块，每个调查地均可从入口步行抵达",()=>{
+    const sites=T.siteList(region),start=T.toGrid(sites[gate].at);
+    const reachable=connected(start,p=>T.walkable(p,region));
+    for(let y=0;y<=T.H;y++)for(let x=0;x<=T.W;x++){
+      assert.equal(reachable.has(id({x,y})),T.walkable({x,y},region),"cell "+x+","+y);
+    }
+    assert.ok(reachable.size>1000);
+    for(const site of Object.values(sites)){
+      const route=T.route(start,T.toGrid(site.at),region);
+      assert.ok(route);assert.ok(route.every(p=>!T.tallGrass(p,region)));
+    }
+  });
+}

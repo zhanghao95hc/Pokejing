@@ -19,7 +19,8 @@ function runMistcape() {
   const heldDirections=new Map();
   const menu=$("#gameMenu");
   let menuPage="home";
-  const regionName=()=>s.region==="cove"?"盐镜湾":"雾岬海岸";
+  const J=G.chapters;
+  const regionName=()=>T.areas[s.region].name;
   const follow=()=>s.follow!==false;
   const resizeField=new ResizeObserver(sizeField);
   const paths={
@@ -78,6 +79,21 @@ function runMistcape() {
       play(freq,audio.currentTime);if(extra)play(freq*1.5,audio.currentTime+.12);
     } catch {}
   }
+  function soundGong(longStroke){
+    if(!s.sound)return;
+    try{
+      audio||=new(window.AudioContext||window.webkitAudioContext)();
+      audio.resume().catch(()=>{});
+      const start=audio.currentTime,duration=longStroke?1.35:.34;
+      for(const [hz,gain] of [[232,.09],[563,.035],[917,.018]]){
+        const tone=audio.createOscillator(),amp=audio.createGain();
+        tone.frequency.value=hz;amp.gain.setValueAtTime(.001,start);
+        amp.gain.exponentialRampToValueAtTime(gain,start+.012);
+        amp.gain.exponentialRampToValueAtTime(.001,start+duration);
+        tone.connect(amp);amp.connect(audio.destination);tone.start(start);tone.stop(start+duration);
+      }
+    }catch{}
+  }
   function toast(msg){$("#toast").textContent=msg;$("#toast").classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("#toast").classList.remove("show"),2100);}
   function clearWalk(){
     cancelAnimationFrame(frameRequest);frameRequest=0;
@@ -116,7 +132,7 @@ function runMistcape() {
       ${s.battle?"":sitePanel()}<div class="jump-list">${Object.entries(places).map(([k,d])=>`<button class="jump" data-do="travel" data-arg="${k}" ${s.battle?"disabled":""}><span class="jump-label">${icon(d.icon)}${d.name}</span>${k===near?"<small>所在地</small>":""}${icon("chevron")}</button>`).join("")}</div>`;
     }else if(page==="journal"){
       const grass=T.tallGrass(s.pos,s.region);
-      body=`<section class="journal-block"><h3>当前目标</h3><p>${nextGoal()}</p></section><section class="journal-block"><h3>最近记录</h3><p>${journalHTML(s.notice)}</p></section><div class="journal-location"><b>${regionName()}</b>${weatherBadge(s.battle)}<span class="ground-name">${grass?"草丛 · 可能遇敌":"平地 · 安全"}</span></div>`;
+      body=`<section class="journal-block"><h3>当前目标</h3><p>${nextGoal()}</p></section>${chapterJournal()}<section class="journal-block"><h3>最近记录</h3><p>${journalHTML(s.notice)}</p></section><div class="journal-location"><b>${regionName()}</b>${weatherBadge(s.battle)}<span class="ground-name">${grass?"草丛 · 可能遇敌":"平地 · 安全"}</span></div>`;
     }else if(page==="settings"){
       body=`<div class="setting-list"><button data-do="sound" aria-pressed="${s.sound}">${icon(s.sound?"sound":"mute")}<b>音乐与音效</b><span>${s.sound?"已开启":"已关闭"}</span></button>
       <button data-do="camera" aria-pressed="${follow()}">${icon("compass")}<b>探索视角</b><span>${follow()?"跟随 Levi":"广角"}</span></button>
@@ -158,33 +174,66 @@ function runMistcape() {
     return site||"cover";
   }
   const atFishingBank=()=>s.region==="cove"&&T.near(s.pos,s.region)==="pool";
+  function chapterJournal(){
+    return Object.entries(J.chapters).filter(([id])=>J.open(s,id)).map(([id,c])=>{
+      const stage=s.chapters[id];
+      return `<article class="chapter-note ${id}"><div class="chapter-print" aria-hidden="true"></div><div><small>${c.badge} · ${c.region}</small><h3>${c.title}</h3><p>${[c.opening,c.clue,c.ending][stage]}</p></div></article>`;
+    }).join("");
+  }
   function nextGoal(){
-  if(!s.camp)return "前往林间练习场，与巡林员青禾切磋。";
-  if(!s.badge)return "前往望潮灯台，赢得第一枚徽章。";
-  if(s.region==="coast")return s.secondBadge?"两枚徽章已集齐，可继续培养队伍或参加双打。":"从研究站或灯台搭船，前往盐镜湾。";
-  if(!s.rod)return "去潮汐小屋借竿，调查沿岸的本地伙伴。";
-  return !G.canDuel(s)?"结缘瓦当蟹、桂月蛾或潮钟螺，取得观测台挑战资格。":s.secondBadge?"盐镜湾调查完成，可继续垂钓和收集。":"前往盐镜观测台，挑战领航员汐弦。";
-}
+    if(!s.camp&&!s.badge)return "到林间练习场找青禾切磋。她在等夜渡船靠岸。";
+    const {ridge,marsh}=J.chapters;
+    if(!s.badge)return ridge.goals[s.chapters.ridge];
+    if(s.region==="ridge"&&s.chapters.ridge<2)return ridge.goals[s.chapters.ridge];
+    if(s.secondBadge){
+      if(s.region==="marsh"&&s.chapters.marsh<2)return marsh.goals[s.chapters.marsh];
+      return "两枚徽章已集齐。可以重访栖风岭和鸣沙泽，循迹补全灵兽谱。";
+    }
+    if(s.region==="ridge")return "从松关栈门下山，再去研究站或灯台搭船。";
+    if(s.region==="coast")return "从研究站或望潮灯台搭船前往盐镜湾。";
+    if(s.chapters.marsh<2)return marsh.goals[s.chapters.marsh];
+    return G.hasLocal(s)?"返回盐镜观测台，挑战领航员汐弦。":"结缘盐镜湾或鸣沙泽的一种本地灵兽，再回盐镜观测台。";
+  }
   function sitePanel(standalone=false){
-  const site=activeSite(),reeds=s.region==="cove";
+  const site=activeSite(),reeds=["cove","marsh"].includes(s.region);
   const d=site==="cover"?{name:reeds?"湾畔芦荡":"原野高草",icon:"leaf",action:reeds?"调查潮草":"调查草丛",desc:"草叶间有灵兽活动的痕迹。穿行或调查这里，都有机会相遇。"}:T.siteList(s.region)[site],options=[];
-  if(d)options.push(btn(d.action,site==="dock"?"sail":"interact",site,"primary"));
+  const chapter=J.chapters[s.region];
+  const choices=J.options(s,site);
+  if(chapter&&site===chapter.entrance)options.push(btn(d.action,"cross",s.region,"primary"));
+  else if(choices.length)choices.forEach(([key,label])=>options.push(btn(label,"chapterAction",key)));
+  else if(chapter&&[chapter.clueSite,chapter.finishSite].includes(site))options.push(btn(d.action,"chapterAction","inspect","primary"));
+  else if(d)options.push(btn(d.action,site==="dock"?"sail":"interact",site,"primary"));
+  for(const [id,c] of Object.entries(J.chapters)){
+    if(site===c.gate&&s.region===c.origin)options.push(btn(c.passage,"cross",id,"",!J.open(s,id)));
+  }
   if(["lab","hut"].includes(site))options.push(btn("补给商店","shop"));
   const outbound=site==="lab"||site==="beacon";
   if(outbound)options.push(btn("搭船去盐镜湾","sail","","",!s.badge));
   if(site==="beacon"&&s.badge)options.push(btn("双打交流赛","pairStart"));
   if(atFishingBank()&&s.rod)options.push(btn("抛竿垂钓","fish"));
   const title=d?.name||(reeds?"滨海滩地":"海岬原野");
+  const assignment=Object.values(J.chapters).find(c=>s.region===c.origin&&site===c.gate);
+  const assigned=site==="camp"?"ridge":"marsh";
+  const brief=assignment?[assignment.opening,assignment.clue,assignment.ending][s.chapters[assigned]]:choices.length?chapter.clue:"";
+  const rhythm=site==="gong"&&s.chapters.beats>0?"已敲："+Array(s.chapters.beats).fill("短").join("、")+"。":"";
   const description=d?.desc||(atFishingBank()&&s.rod?"这里靠近水边，可以在岸上抛竿。":"脚下是平地，可以自由行走。成片的高草里栖息着野生灵兽。");
   const heading=standalone?"":`<div class="where">${icon(d?.icon||"compass")}<h2>${title}</h2></div>`;
-  return `<section class="panel spot-panel">${heading}<p>${description}</p><div class="tools">${options.join("")||btn("查看行囊","bag")}</div>${outbound&&!s.badge?"<p class='note'>获得望潮灯台的潮光徽章后可搭船。</p>":""}${standalone?"<p class='site-feedback' role='status'></p>":""}</section>`;
+  return `<section class="panel spot-panel">${heading}<p>${description}</p>${brief?`<p class="chapter-brief">${brief} ${rhythm}</p>`:""}<div class="tools">${options.join("")||btn("查看行囊","bag")}</div>${outbound&&!s.badge?"<p class='note'>获得望潮灯台的潮光徽章后可搭船。</p>":""}${standalone?"<p class='site-feedback' role='status'></p>":""}</section>`;
 }
   function weatherBadge(b){
   const w=b?.weather||F.ambient(s);
   return `<span class="weather-tag ${w}">${icon(w==="rain"?"drop":"sun")}${F.weatherNames[w]}${b?.weatherTurns?" · "+b.weatherTurns+" 回合":""}</span>`;
 }
+  function fieldSightings(){
+    const id=s.region;
+    if(!J.chapters[id])return "";
+    const done=s.chapters[id]===2;
+    const animals=id==="ridge"?[[done?"raven":"twig",done?78:43,done?22:19],["tuft",29,50]]
+      :[[done?"kui":"fry",done?81:42,done?26:22],["otter",62,65]];
+    return animals.map(([kind,x,y])=>`<img class="field-animal" src="assets/color/${kind}.webp" alt="${species[kind].name}" style="left:${x}%;top:${y}%">`).join("");
+  }
   function world(){
-    return `<section class="field-page" aria-label="${regionName()}"><div class="map-viewport"><div class="map ${s.region}" id="map" role="group" aria-label="${regionName()}可探索地图" tabindex="0"><canvas class="field-cover" width="1200" height="800" aria-hidden="true"></canvas><div class="walker-track"><div class="walker" role="img" aria-label="Levi"></div><i class="foot-grass" hidden aria-hidden="true"></i></div></div></div>
+    return `<section class="field-page" aria-label="${regionName()}"><div class="map-viewport"><div class="map ${s.region}" id="map" role="group" aria-label="${regionName()}可探索地图" tabindex="0"><canvas class="field-cover" width="1200" height="800" aria-hidden="true"></canvas><div class="field-sightings">${fieldSightings()}</div><div class="walker-track"><div class="walker" role="img" aria-label="Levi"></div><i class="foot-grass" hidden aria-hidden="true"></i></div></div></div>
     <div class="field-hud"><div class="touch-pad" aria-label="移动方向">${[["up","↑"],["left","←"],["down","↓"],["right","→"]].map(([k,n])=>`<button data-do="step" data-arg="${k}" aria-label="移动 ${n}">${n}</button>`).join("")}</div><button class="world-action" data-do="inspect" hidden>${icon("compass")} 调查 <kbd>E</kbd></button></div></section>`;
   }
   function sizeField(){
@@ -209,7 +258,7 @@ function runMistcape() {
       const unit=canvas.width/T.W,cells=T.grassCells(region);
       ctx.save();
       ctx.filter="blur(2px)";
-      ctx.fillStyle=region==="cove"?"#37745270":"#28654180";
+      ctx.fillStyle={ridge:"#69603752",marsh:"#5a635352",cove:"#37745270",coast:"#28654180"}[region];
       ctx.beginPath();
       for(const {x,y} of cells){
         ctx.moveTo((x+.75)*unit,y*unit);
@@ -230,7 +279,7 @@ function runMistcape() {
         ctx.restore();
       }
     };
-    grass.src="assets/color/"+(region==="cove"?"reeds":"grass")+".webp";
+    grass.src="assets/color/"+({coast:"grass",cove:"reeds",ridge:"ridge-grass",marsh:"marsh-reeds"}[region])+".webp";
   }
   function paintPosition(pos,cel){
     const {track,walker,fringe}=field,[x,y]=T.toPct(pos);
@@ -251,7 +300,7 @@ function runMistcape() {
   const data=F.abilities[F.ability(m)];
   return `<div class="meter ${cls}"><div class="meter-head"><strong>${species[m.kind].name}</strong><small>Lv.${m.level}</small></div>${hp(m)}<div class="meter-tags">${elType(m.kind)}<span>${data[0]}</span></div>${cls==="own"?`<div class="xp-mini" aria-label="经验 ${m.xp}"><i style="width:${Math.min(100,m.xp/G.threshold(m.level)*100)}%"></i></div>`:""}</div>`;
 }
-  const battleName=mode=>({wild:"草甸相遇",camp:"巡林员的切磋",beacon:"守灯人的试炼",dome:"领航员的试炼"}[mode]);
+  const battleName=mode=>({wild:regionName()+" · 野生相遇",camp:"巡林员的切磋",beacon:"守灯人的试炼",dome:"领航员的试炼"}[mode]);
   function duoCommands(m,j){
   const opts=s.party.map((p,i)=>!s.battle.allies.includes(i)&&p.hp>0?`<option value="swap-${i}">换上 ${species[p.kind].name} · Lv.${p.level}</option>`:"").join("");
   return opts+(s.supply.salves&&m.hp<G.stat(m,0)?`<option value="salves">使用草本药膏 ×${s.supply.salves}</option>`:"")+
@@ -278,7 +327,7 @@ function runMistcape() {
     const title={win:b.mode==="beacon"?"潮光徽章":b.mode==="dome"?"镜潮徽章":"对战胜利",caught:"成功结缘",loss:"返回研究站",run:"安全离开"}[result];
     const sks=a.skills.some(k=>k.pp>0)?a.skills:[{id:"strain",pp:1}];
     const caught=result==="caught";
-    const resultNote=caught?journalHTML(b.lines.at(-1)||species[f.kind].name+"已结缘。"):result==="win"&&b.mode==="beacon"?"第一枚徽章已获得，可搭船前往盐镜湾。":"本场对战已经结束。";
+    const resultNote=caught?journalHTML(b.lines.at(-1)||species[f.kind].name+"已结缘。"):result==="win"&&b.mode==="beacon"?"山口与海岸的两点灯火亮起。研究站与灯台的渡船可以出海了。":result==="win"&&b.mode==="dome"?"盐船已循钟声归港。汐弦把镜潮徽章和那张潮尺拓片一并还给了你。":"本场对战已经结束。";
     const commands=result?`<div class="badge-box">${caught?art(f.kind,"bond-portrait"):icon(b.mode==="beacon"&&result==="win"?"award":"flag")}<div><h2 class="result-title">${title}</h2><p class="note">${resultNote}</p></div></div><div class="dialog-foot">${btn(result==="loss"?"回研究站休整":"继续探索","leave","","primary")}</div>`:
       lost?`<h2>更换出战伙伴</h2><p class="note">当前伙伴已失去战斗能力。</p><div class="dialog-foot">${btn("选择队友","switchDialog","","primary")}</div>`:
       `<div class="small-label">选择招式</div><div class="moves">${sks.map(sk=>{const [n,t,p,,max]=moves[sk.id];const eff=C.effectiveness(t,f.kind);return `<button class="move" data-do="move" data-arg="${sk.id}" ${sk.pp?"":"disabled"}><strong>${icon(types[t][1])} ${n}</strong><small>${types[t][0]} · ${p?(t==="volt"&&F.ability(f)==="coil"?"对手吸收":eff>1?"克制 ×"+eff:eff<1?"抵抗 ×"+eff:"威力 "+p):"变化"}　 PP ${sk.pp}/${max}</small></button>`;}).join("")}</div>
@@ -293,7 +342,7 @@ function runMistcape() {
   function dex(){
     return `<section class="wrap page"><div class="page-title"><div><p>已结缘 ${s.caught.length} / ${Object.keys(species).length} 种　·　野外与对战目击 ${s.seen.length} 种</p></div></div><div class="dex-grid">${Object.entries(species).map(([k,d])=>{
       const known=C.starters.includes(k)||s.seen.includes(k);
-      return `<article class="dex-entry ${k} ${d.type}">${known?plate(k):`<div class="plate"><div class="plate-head"><span class="num">谱 ${d.no}</span></div>${icon("compass")}</div>`}<div class="member-info"><h2>${known?d.name:"尚待发现"}</h2><p>${known?d.desc:Number(d.no)>9?"搭船前往盐镜湾，观察当地生态。":Number(d.no)>6?"培养初始伙伴至 Lv.9，观察它的进化。":"调查风铃草甸，补齐这份观察记录。"}</p><span class="chip">${s.caught.includes(k)?"已结缘":s.seen.includes(k)?"已目击":known?"研究站记录":"未目击"}</span></div></article>`;}).join("")}</div></section>`;
+      return `<article class="dex-entry ${k} ${d.type}">${known?plate(k):`<div class="plate"><div class="plate-head"><span class="num">谱 ${d.no}</span></div>${icon("compass")}</div>`}<div class="member-info"><h2>${known?d.name:"尚待发现"}</h2><p>${known?d.desc:d.habitat?d.habitat:Number(d.no)>9?"搭船前往盐镜湾，观察当地生态。":Number(d.no)>6?"培养初始伙伴至 Lv.9，观察它的进化。":"调查风铃草甸，补齐这份观察记录。"}</p>${known?`<p class="note">${C.lineage(k)}${d.habitat?"　·　"+d.habitat:""}</p>`:""}<span class="chip">${s.caught.includes(k)?"已结缘":s.seen.includes(k)?"已目击":known?"研究站记录":"未目击"}</span></div></article>`;}).join("")}</div></section>`;
   }
   function render(){
     clearWalk();resizeField.disconnect();field=null;
@@ -379,7 +428,7 @@ function runMistcape() {
   function inspect(){
     if(!fieldOpen())return;
     const site=activeSite();
-    if(["lab","beacon","camp","dock","hut","dome"].includes(site)||(s.rod&&atFishingBank())){
+    if((site&&Object.hasOwn(T.siteList(s.region),site)&&!["grass","pool"].includes(site))||(s.rod&&atFishingBank())){
       openMenu("site");return;
     }
     interact(site);
@@ -390,8 +439,8 @@ function runMistcape() {
     G.restore(s);s.notice="伙伴体力和招式次数已恢复，基础补给已备齐。";
     if(k==="hut"&&!s.rod){s.rod=true;s.notice="守潮人把潮线竿交给了 Levi。前往潮声浅滩，抛竿等待浮标下沉。";}
     beep(500,true);
-  }else if(k==="beacon"&&!s.camp){s.notice="岑川指向北边的练习场：「先让青禾看看你们的默契吧。」";}
-  else if(k==="dome"&&!G.canDuel(s)){s.notice="汐弦需要一份本地观察记录。去浅滩结缘瓦当蟹、桂月蛾或潮钟螺。";}
+  }else if(k==="beacon"&&!G.canBeacon(s)){s.notice=nextGoal();}
+  else if(k==="dome"&&!G.canDuel(s)){s.notice=nextGoal();}
   else {G.encounter(s,["grass","pool","cover"].includes(k)?"wild":k);beep(570,true);}
   save();
   if(!s.battle&&menu.open&&menuPage==="site"){
@@ -428,7 +477,7 @@ function runMistcape() {
   modal(d.name,`<div class="dossier"><div class="portrait">${art(m.kind)}</div><div>${elType(m.kind)}<h3>Lv.${m.level}　${d.role}</h3>${hp(m)}<small>EXP ${m.xp} / ${G.threshold(m.level)}</small></div></div>
   <div class="skill-notes"><p><b>性格</b> ${F.disposition(m)}</p><p><b>特性</b> ${ability} · ${explain}</p><p><b>携带</b> ${F.stock[m.held]?.name||"空"}</p></div>
   <table class="stat-table"><thead><tr><th>能力</th><th>数值</th><th>个体值</th><th>努力值</th></tr></thead><tbody>${F.labels.map((n,j)=>`<tr><th>${n}</th><td>${G.stat(m,j)}</td><td>${m.iv[j]}</td><td>${m.ev[j]}</td></tr>`).join("")}</tbody></table>
-  <p class="note">累计努力值 ${m.ev.reduce((a,b)=>a+b,0)} / 510${C.evolutions[m.kind]?"　·　Lv.9 进化":""}</p>
+  <p class="note">累计努力值 ${m.ev.reduce((a,b)=>a+b,0)} / 510　·　${C.lineage(m.kind)}</p>
   ${m.skills.map(sk=>`<div class="dialog-row"><div><b>${moves[sk.id][0]}</b><p class="note">${moveInfo(sk.id)}</p></div><small>PP ${sk.pp}</small></div>`).join("")}
   <div class="dialog-foot tools">${btn("更换携带物","equipment",i,"",!manage)}${btn("整备招式","dojo",i,"",!manage||!atDesk)}${Object.values(C.evolutions).includes(m.kind)?btn("重看进化","replayEvolution",i):""}${btn("返回","close")}</div>${!atDesk?"<p class='note dialog-foot'>在雾岬研究站或潮汐小屋可以整备招式。</p>":""}`);
 }
@@ -519,13 +568,19 @@ function runMistcape() {
         }break;
       }
       case "learn":{const [i,id,j]=arg.split(",");if(["lab","hut"].includes(activeSite())&&F.teach(s,Number(i),id,Number(j))){save();render();detail(Number(i));}break;}
+      case "cross":if(J.crossing(s,arg)){closeMenu();save();render();beep(480,true);toast(s.notice);}break;
+      case "chapterAction":
+        if(J.investigate(s,arg)){
+          save();$(".field-sightings").innerHTML=fieldSightings();openMenu("site");menu.querySelector(".site-feedback").textContent=s.notice;
+          if(arg==="long"||arg==="short")soundGong(arg==="long");else beep(540);
+        }break;
       case "sail":if(G.sail(s)){closeMenu();save();render();beep(480,true);toast(s.notice);}break;
       case "fish":cast();break;
       case "hook":if(fishReady&&atFishingBank()&&G.encounter(s,"fish")){fishReady=false;closeDialog();closeMenu();save();render();}break;
       case "close":closeDialog();break;
       case "detail":detail(Number(arg));break;
       case "replayEvolution":{
-        const from=C.starters.find(k=>C.evolutions[k]===s.party[Number(arg)]?.kind);
+        const from=Object.keys(C.evolutions).find(k=>C.evolutions[k]===s.party[Number(arg)]?.kind);
         if(from){closeDialog();showEvolutions(from).then(()=>detail(Number(arg)));}
         break;
       }

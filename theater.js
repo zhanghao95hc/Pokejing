@@ -255,7 +255,7 @@ const MistTheater=(()=>{
     scene.className="evolution-scene";scene.setAttribute("aria-label","灵兽进化");document.body.append(scene);
     scene.innerHTML='<div class="evo-paint"><div class="evo-portraits"></div></div><div class="evo-caption"><div><small>灵兽进化</small><h2 aria-live="polite"></h2></div><button class="btn" type="button">跳过演出</button></div>';
     const paint=scene.querySelector(".evo-portraits"),title=scene.querySelector("h2"),button=scene.querySelector("button"),label=scene.querySelector("small");
-    const stages={moss:["竹角抽枝","青鳞渐生","松冠舒展"],ember:["尾焰渐盛","双尾分岔","三尾舒展"],tide:["荷鳍舒张","鲤须渐长","螭爪初成"]};
+    const stages={moss:["竹角抽枝","青鳞渐生","松冠舒展"],ember:["尾焰渐盛","双尾分岔","三尾舒展"],tide:["荷鳍舒张","鲤须渐长","螭爪初成"],twig:["雏羽换色","翼纹舒展","铜尾分岔"],fry:["鳍缘抽长","金翼展开","长须迎潮"]};
     const names=k=>catalog.species[k].name,young="assets/color/"+from+".webp",adult="assets/color/"+to+".webp",strip=folder+"evo-"+from+".webp";
     const layers=[young,strip,strip,strip,adult].map((url,i)=>{
       const layer=node("div","evo-form",paint);

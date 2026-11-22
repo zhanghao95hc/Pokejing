@@ -66,7 +66,8 @@ test("盐镜湾渡船、区域地图连通性、钓竿门槛与三人首领战",
   const s=start();assert.equal(G.sail(s),false);s.badge=true;assert.ok(G.sail(s));assert.equal(s.region,"cove");
   for(const site of Object.values(T.coveSites)){assert.ok(T.route(s.pos,T.toGrid(site.at),"cove"));}
   assert.equal(G.encounter(s,"fish",fixed),false);s.rod=true;assert.ok(G.encounter(s,"fish",()=>.8));assert.equal(s.battle.weather,"rain");
-  s.battle=null;assert.equal(G.encounter(s,"dome",fixed),false);s.caught.push("snail");assert.ok(G.encounter(s,"dome",fixed));assert.equal(s.battle.rivals.length,3);
+  s.battle=null;assert.equal(G.encounter(s,"dome",fixed),false);s.caught.push("snail");assert.equal(G.encounter(s,"dome",fixed),false);
+  s.chapters.marsh=2;assert.ok(G.encounter(s,"dome",fixed));assert.equal(s.battle.rivals.length,3);
   s.battle.foe=2;s.party[0]=unit("grove",40);s.battle.rivals[2].hp=1;G.act(s,"move","sprout",fixed);assert.ok(s.secondBadge);const paid=s.coins;
   assert.equal(G.act(s,"move","sprout"),false);assert.equal(s.coins,paid);G.leaveBattle(s);assert.ok(G.sail(s));assert.equal(s.region,"coast");
 });

@@ -24,7 +24,7 @@ const FieldRules=(()=>{
   };
   const weatherNames={clear:"晴朗",sun:"烈日",rain:"降雨"};
   const statusNames={burn:"灼伤",para:"麻痹",sleep:"睡眠",poison:"中毒"};
-  const yields={moss:0,grove:0,ember:5,pyre:5,tide:3,sail:3,wind:5,stone:2,spark:5,crab:1,moth:3,snail:4};
+  const yields={moss:0,grove:0,ember:5,pyre:5,tide:3,sail:3,wind:5,stone:2,spark:5,crab:1,moth:3,snail:4,twig:5,raven:1,ape:1,tuft:4,fry:5,glider:3,kui:2,otter:5};
   function natureStats(m){
     const n=m.nature??0;return [Math.floor(n/5)+1,n%5+1];
   }
@@ -44,7 +44,7 @@ const FieldRules=(()=>{
     if(mon.hp>0)mon.hp+=stat(mon,0)-oldHP;
   }
   function restock(){return {berry:2,balm:1,lens:0,tonic:2};}
-  function ambient(s){return s.region==="cove"?"rain":Math.floor(s.steps/64)%3===1?"sun":"clear";}
+  function ambient(s){return ["cove","marsh"].includes(s.region)?"rain":Math.floor(s.steps/64)%3===1?"sun":"clear";}
   function initialWeather(s){const weather=ambient(s);return {weather,weatherTurns:weather==="clear"?0:5};}
   function weatherPower(b,type){
     if(b.weather==="rain")return type==="water"?1.5:type==="fire"?.5:1;
@@ -94,7 +94,10 @@ const FieldRules=(()=>{
     s.supply[id]--;return true;
   }
   function teachable(m){
-    const base=C.species[m.kind].moves.slice(0,m.level>=7?4:3);
+    const parent=Object.keys(C.evolutions).find(k=>C.evolutions[k]===m.kind);
+    const slots=m.level>=7?4:3;
+    const base=C.species[m.kind].moves.slice(0,slots);
+    if(parent)base.push(...C.species[parent].moves.slice(0,slots));
     const extras={leaf:["sun","lull"],fire:["sun","focus"],water:["rain","focus","swell"],air:["lull","focus"],rock:["needle","focus"],volt:["rain","focus"]};
     return [...new Set([...base,...extras[C.species[m.kind].type],"veil"])];
   }

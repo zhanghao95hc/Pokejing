@@ -26,6 +26,23 @@ const MistCatalog = (() => {
     moth:{no:"011",name:"桂月蛾",type:"air",second:"leaf",trait:"轻盈",role:"干扰型",desc:"双翅各藏一轮浅月。它爱停在桂枝背阴处，振翅时抖落一层带甜香的细粉。",stats:[54,42,46,72,62,65],moves:["gust","lull","sprout","dust"]},
     snail:{no:"012",name:"潮钟螺",type:"water",second:"volt",trait:"沉静",role:"特攻型",desc:"螺壳泛着古铜青色。每当雨点敲响壳上的云纹，浅水里便荡开细细的电光。",stats:[63,39,60,76,64,34],moves:["ripple","jolt","rain","surge"]}
   });
+  Object.assign(species,{
+    twig:{no:"013",name:"衔枝雀",type:"air",trait:"执着",role:"先手型",desc:"落下的细枝若被风吹走，它会沿山沟再捡回来。岭上的小雀总朝同一个缺口起飞。",stats:[46,51,39,40,47,66],moves:["dash","gust","sprout","gale"],habitat:"栖风岭的草窝与背风松坡。"},
+    raven:{no:"014",name:"填岫鸦",type:"air",second:"rock",trait:"坚忍",role:"强攻型",desc:"它挑有棱的石子压住巢脚，再把红枝嵌进石缝。年复一年，一段裂开的崖岸被垫成了缓坡。",stats:[68,81,63,50,65,86],moves:["dash","gust","chip","gale"],habitat:"衔枝雀升至 Lv.10 时进化。"},
+    ape:{no:"015",name:"白耳狌",type:"rock",trait:"善听",role:"强攻型",desc:"白耳能分辨滚石与脚步。它常抢先绕到行人面前，用一串短啸提醒哪块浮石踩不得。",stats:[60,74,62,36,47,62],moves:["dash","chip","focus","ridge"],habitat:"栖风岭山脚和风架旁的高草。"},
+    tuft:{no:"016",name:"绒尾狸",type:"leaf",trait:"恋巢",role:"干扰型",desc:"尾尖沾着桃色树脂，它用这把软刷替幼鸟扫走巢底的松针。循松坡上的扫痕便能找到它。",stats:[62,43,51,66,67,52],moves:["sprout","lull","shelter","sap"],habitat:"栖风岭高草，也能在背风松坡循迹寻找。"},
+    fry:{no:"017",name:"灯鳍苗",type:"water",trait:"趋光",role:"灵巧型",desc:"薄鳍在浅水中像两片橘皮。退潮时成群贴着潮尺打转，露出水面的刻线会被它们逐一照亮。",stats:[47,40,44,62,51,61],moves:["ripple","dash","rain","foam"],habitat:"鸣沙泽芦苇间，也会在归鳍汊口聚集。"},
+    glider:{no:"018",name:"巡潮文鳐",type:"water",second:"air",trait:"识潮",role:"游击型",desc:"风从海上转向时，它舒开金纹长鳍，贴着潮头滑翔。船夫按鱼群落水的位置辨认深槽。",stats:[68,65,56,83,66,81],moves:["ripple","gust","rain","swell"],habitat:"灯鳍苗升至 Lv.14 时进化。"},
+    kui:{no:"019",name:"磬腹夔",type:"volt",second:"rock",trait:"沉稳",role:"耐久型",desc:"它用独足踏住松软河床。雷雨欲来，肚腹的金色涡纹会嗡嗡作响，与旧渡钟遥遥相和。",stats:[76,55,71,70,52,33],moves:["jolt","chip","shelter","surge"],habitat:"鸣沙泽钟架附近的芦荡。"},
+    otter:{no:"020",name:"白额潮獭",type:"water",trait:"好客",role:"支援型",desc:"天亮前把石子在肚皮上排成一行，留下最大的一颗压住渔网。村里人说这是它付的借网钱。",stats:[56,58,49,62,59,71],moves:["ripple","dash","veil","swell"],habitat:"鸣沙泽低滩与归鳍汊口。"}
+  });
+  Object.assign(evolutions,{twig:"raven",fry:"glider"});
+  const evolutionLevels={moss:9,ember:9,tide:9,twig:10,fry:14};
+  function lineage(kind){
+    if(evolutions[kind])return "Lv."+evolutionLevels[kind]+" → "+species[evolutions[kind]].name;
+    const base=Object.keys(evolutions).find(k=>evolutions[k]===kind);
+    return base?"由"+species[base].name+"进化":"独立形态";
+  }
   // Type, power, accuracy, PP, damage category, optional effect.
   const moves = {
     bump:["肩撞","plain",44,100,30,"physical"], dash:["抢步","plain",36,100,24,"physical","quick"],
@@ -72,6 +89,6 @@ const MistCatalog = (() => {
     if(weak[attack]?.includes(defend)) return .5;
     return 1;
   }
-  return {types,species,moves,journalText,matchup,affinity,effectiveness,evolutions,starters:["moss","ember","tide"]};
+  return {types,species,moves,journalText,matchup,affinity,effectiveness,evolutions,evolutionLevels,lineage,starters:["moss","ember","tide"]};
 })();
 if(typeof module !== "undefined") module.exports = MistCatalog;

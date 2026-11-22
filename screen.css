@@ -181,3 +181,19 @@ body[data-scene=battle] #top { top: max(14px,env(safe-area-inset-top)); }
   .battle-desk .move strong { font-size: 16px; }
   .battle-desk .tools .btn { padding: 4px 8px; min-height: 31px; }
 }
+
+.map.ridge, .travel-atlas.ridge { background-image: url("assets/color/ridge.webp"); }
+.map.marsh, .travel-atlas.marsh { background-image: url("assets/color/marsh.webp"); }
+.arena.region-marsh { background-image: url("assets/color/tidal-arena.webp"); }
+.chapter-note { display: grid; grid-template-columns: 82px 1fr; gap: 14px; align-items: center; margin: 15px 0; }
+.chapter-print { height: 100%; min-height: 88px; border-radius: 3px; background: url("assets/color/ridge.webp") 64% 30% / cover; }
+.chapter-note.marsh .chapter-print { background-image: url("assets/color/marsh.webp"); }
+.chapter-note h3 { margin: 2px 0 4px; font-family: var(--brush); }
+.chapter-note p, .chapter-brief { margin: 5px 0 10px; line-height: 1.6; }
+.chapter-note small { color: #6b5130; }
+.spot-panel .chapter-brief { border-left: 2px solid #a86537; padding-left: 10px; }
+
+.field-animal { position: absolute; z-index: 2; pointer-events: none; width: 3.7%; height: 6%; object-fit: contain; transform: translate(-50%, -90%); filter: drop-shadow(0 1px 1px #4839215e); }
+.ridge .foot-grass { background-image: url("assets/color/ridge-grass.webp"); }
+.marsh .foot-grass { background-image: url("assets/color/marsh-reeds.webp"); }
+.ridge .field-cover, .marsh .field-cover { filter: contrast(1.32) saturate(1.5) brightness(.87); }

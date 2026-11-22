@@ -50,10 +50,11 @@ test("草甸捕捉消耗道具，满队入寄养",()=>{
     G.leaveBattle(s);assert.equal(s.battle,null);assert.ok(G.valid(s));
   }
 });
-test("训练师禁止逃跑和捕捉，灯台要求通行签",()=>{
+test("训练师禁止逃跑和捕捉，灯台要求练习场与引灯调查",()=>{
   const s=ready();assert.equal(G.encounter(s,"beacon",fixed),false);G.encounter(s,"camp",fixed);
   assert.equal(G.act(s,"run"),false);assert.equal(G.act(s,"bell"),false);assert.equal(s.supply.bells,6);
   s.battle.rivals[0].hp=1;G.act(s,"move","sprout",fixed);assert.ok(s.camp);G.leaveBattle(s);
+  assert.equal(G.encounter(s,"beacon",fixed),false);s.chapters.ridge=2;
   assert.ok(G.encounter(s,"beacon",fixed));assert.equal(s.battle.rivals.length,2);
 });
 test("替补、倒下后免费换人、药膏、研究站与战败恢复",()=>{

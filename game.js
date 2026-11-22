@@ -4,6 +4,7 @@ const MistGame = (() => {
   const C=typeof MistCatalog!=="undefined"?MistCatalog:require("./catalog.js");
   const T=typeof MistTrail!=="undefined"?MistTrail:require("./trail.js");
   const F=typeof FieldRules!=="undefined"?FieldRules:require("./field-rules.js");
+  const chapters=typeof MistChapters!=="undefined"?MistChapters:require("./chapters.js");
   const {species,moves,matchup}=C;
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
   const name=m=>species[m.kind].name;
@@ -17,7 +18,7 @@ const MistGame = (() => {
     return mon;
   }
   function fresh() {
-    return {version:2,starter:null,party:[],box:[],seen:[],caught:[],supply:{bells:6,salves:3,...F.restock()},coins:70,region:"coast",rod:false,secondBadge:false,pos:{...T.spawn},camp:false,badge:false,steps:0,battle:null,notice:"",sound:false,grace:4};
+    return {version:2,starter:null,party:[],box:[],seen:[],caught:[],supply:{bells:6,salves:3,...F.restock()},coins:70,region:"coast",chapters:chapters.fresh(),rod:false,secondBadge:false,pos:{...T.spawn},camp:false,badge:false,steps:0,battle:null,notice:"",sound:false,grace:4};
   }
   function record(list,kind) {if(!list.includes(kind)) list.push(kind);}
   function start(s,kind,rng=Math.random) {
@@ -37,7 +38,7 @@ const MistGame = (() => {
     while(mon.xp>=threshold(mon.level)&&mon.level<50) {
       const old=stat(mon,0); mon.xp-=threshold(mon.level);mon.level++;
       lines.push(name(mon)+"升至 Lv."+mon.level+"！");
-      if(mon.level===9&&C.evolutions[mon.kind]) {
+      if(C.evolutions[mon.kind]&&mon.level>=C.evolutionLevels[mon.kind]) {
         const before=name(mon);mon.kind=C.evolutions[mon.kind];
         lines.push(before+"进化为"+name(mon)+"！");
       }
@@ -57,7 +58,7 @@ const MistGame = (() => {
     record(s.caught,mon.kind);record(s.seen,mon.kind);
   }
   const stages=()=>({attack:0,guard:0,speed:0,special:0});
-  const localKinds=["crab","moth","snail"];
+  const localKinds=["crab","moth","snail","fry","glider","kui","otter"];
   function sail(s){
     if(!s.badge||s.battle)return false;
     const site=T.near(s.pos,s.region);
@@ -66,20 +67,31 @@ const MistGame = (() => {
     else return false;
     s.grace=5;s.notice=s.region==="cove"?"盐镜湾到了。先去渔舍借一根钓竿，或到浅滩寻找本地伙伴。":"渡船回到了雾岬研究站。";return true;
   }
-  function canDuel(s){return s.badge&&s.region==="cove"&&localKinds.some(k=>s.caught.includes(k));}
+  function canBeacon(s){return s.badge||(s.camp&&s.chapters.ridge===2);}
+  function hasLocal(s){return localKinds.some(k=>s.caught.includes(k));}
+  function canDuel(s){return s.badge&&s.region==="cove"&&(s.secondBadge||s.chapters.marsh===2&&hasLocal(s));}
+  function wildHabitat(s,fish,track){
+    if(track==="nest")return ["twig","tuft","tuft"];
+    if(track==="inlet")return ["fry","otter","otter"];
+    if(s.region==="ridge")return s.pos.x>=34?["ape","ape","twig","tuft"]:["twig","twig","ape","tuft"];
+    if(s.region==="marsh")return s.pos.x>=37?["kui","kui","fry","otter"]:["fry","fry","otter","kui"];
+    if(s.region==="cove")return fish?["snail","snail","tide","crab"]:["crab","moth","moth","wind"];
+    const coast=["wind","stone","spark"];return s.badge?[...coast,...C.starters]:coast;
+  }
   function encounter(s,mode,rng=Math.random) {
-    if(!s.starter||s.battle||!["wild","fish","camp","beacon","dome"].includes(mode)||mode==="beacon"&&!s.camp||
+    const track=mode==="nest"||mode==="inlet"?mode:null;
+    if(track){if(T.near(s.pos,s.region)!==track)return false;mode="wild";}
+    if(!s.starter||s.battle||!["wild","fish","camp","beacon","dome"].includes(mode)||mode==="beacon"&&!canBeacon(s)||
       mode==="fish"&&(!s.rod||s.region!=="cove")||mode==="dome"&&!canDuel(s)) return false;
     const fish=mode==="fish";if(fish)mode="wild";
-    const wild=["wind","stone","spark"];
-    const pool=s.region==="cove"?(fish?["snail","snail","tide","crab"]:["crab","moth","moth","wind"]):s.badge?[...wild,...C.starters]:wild;
-    const base=s.region==="cove"?7:3;
+    const pool=wildHabitat(s,fish,track);
+    const base={coast:3,ridge:5,cove:7,marsh:8}[s.region];
     const rivals=mode==="wild"?[makeMon(pool[Math.floor(rng()*pool.length)],base+Math.floor(rng()*(s.badge?5:3)),rng)]:
-      mode==="camp"?[makeMon("spark",5,rng)]:mode==="dome"?[makeMon("crab",10,rng),makeMon("moth",11,rng),makeMon("snail",12,rng)]:[makeMon("wind",6,rng),makeMon("stone",7,rng)];
+      mode==="camp"?[makeMon("spark",5,rng)]:mode==="dome"?[makeMon("crab",10,rng),makeMon("snail",12,rng),makeMon("glider",14,rng)]:[makeMon("twig",6,rng),makeMon("stone",7,rng)];
     if(mode==="dome")rivals[2].held="berry";
     const lead=s.party.findIndex(m=>m.hp>0);
     if(lead<0) return false;
-    const intro=mode==="wild"?(fish?"浮标沉了下去，钓起了":"草叶一动，出现了")+name(rivals[0])+"！":(mode==="camp"?"巡林员青禾":mode==="dome"?"领航员汐弦":"守灯人岑川")+"派出了"+name(rivals[0])+"。";
+    const intro=mode==="wild"?(fish?"浮标沉了下去，钓起了":track?"沿着踪迹，你遇见了":"草叶一动，出现了")+name(rivals[0])+"！":(mode==="camp"?"巡林员青禾":mode==="dome"?"领航员汐弦":"守灯人岑川")+"派出了"+name(rivals[0])+"。";
     s.battle={mode,rivals,foe:0,lead,round:1,playerStage:stages(),foeStage:stages(),participants:[lead],lines:[intro],history:[intro],result:null,...F.initialWeather(s)};
     record(s.seen,rivals[0].kind);return true;
   }
@@ -209,9 +221,9 @@ const MistGame = (() => {
       } else {
         b.result="win";
         const reward={wild:6,camp:24,beacon:40,dome:75}[b.mode];s.coins+=reward;b.lines.push("获得 "+reward+" 枚潮币。");
-        if(b.mode==="camp"&&!s.camp) {s.camp=true;s.supply.salves+=2;b.lines.push("青禾交给你灯台通行签和两份药膏。");}
+        if(b.mode==="camp"&&!s.camp) {s.camp=true;s.supply.salves+=2;b.lines.push("青禾交给你两份药膏，解开练习场的栈门：「海上少了一点灯火。上栖风岭听听风，我在岸边接船。」");}
         if(b.mode==="beacon"&&!s.badge) {s.badge=true;b.lines.push("获得潮光徽章！灯台与研究站开通了前往盐镜湾的航线。");}
-        if(b.mode==="dome"&&!s.secondBadge){s.secondBadge=true;b.lines.push("汐弦赠予镜潮徽章，盐镜湾调查完成！");}
+        if(b.mode==="dome"&&!s.secondBadge){s.secondBadge=true;b.lines.push("汐弦将镜潮徽章压在那张拓片上：「让船找到归路的人，也该在这张海图上留个名字。」");}
         return;
       }
     }
@@ -354,7 +366,7 @@ const MistGame = (() => {
   function leaveBattle(s) {
     const b=s.battle;if(!b?.result) return false;
     s.notice=b.lines.join(" ");
-    if(b.result==="loss"){restore(s);s.pos=s.region==="cove"?T.toGrid(T.coveSites.hut.at):{...T.spawn};s.notice="全队已在补给点恢复。你可以调整首发，准备好后再去挑战。";}
+    if(b.result==="loss"){restore(s);if(s.region==="ridge")s.region="coast";if(s.region==="marsh")s.region="cove";s.pos=s.region==="cove"?T.toGrid(T.coveSites.hut.at):{...T.spawn};s.notice="全队已在补给点恢复。你可以调整首发，准备好后再去挑战。";}
     s.grace=5;s.battle=null;return true;
   }
   function step(s,pos,rng=Math.random) {
@@ -369,9 +381,10 @@ const MistGame = (() => {
       Number.isFinite(m.xp)&&Number.isInteger(m.nature)&&m.nature>=0&&m.nature<25&&Array.isArray(m.ev)&&m.ev.length===6&&
       m.ev.every(v=>Number.isInteger(v)&&v>=0&&v<=255)&&m.ev.reduce((a,b)=>a+b,0)<=510&&(!m.held||F.stock[m.held]?.hold)&&
       Array.isArray(m.skills)&&m.skills.length>0&&m.skills.length<=4&&m.skills.every(k=>!!moves[k.id]&&Number.isInteger(k.pp)&&k.pp>=0);
-    if(!s||s.version!==2||!["coast","cove"].includes(s.region)||!Number.isInteger(s.coins)||s.coins<0||!Array.isArray(s.party)||!s.party.every(mon)||s.party.length>6||!Array.isArray(s.box)||!s.box.every(mon)) return false;
+    if(!s||s.version!==2||!Object.hasOwn(T.areas,s.region)||!Number.isInteger(s.coins)||s.coins<0||!Array.isArray(s.party)||!s.party.every(mon)||s.party.length>6||!Array.isArray(s.box)||!s.box.every(mon)) return false;
     if((s.starter===null?s.party.length!==0:!C.starters.includes(s.starter)||!s.party.length)||!s.pos||!Number.isInteger(s.pos.x)||!Number.isInteger(s.pos.y)||!T.walkable(s.pos,s.region)||
       !Array.isArray(s.seen)||!Array.isArray(s.caught)||!s.supply||!Object.keys(F.stock).every(id=>Number.isInteger(s.supply[id])&&s.supply[id]>=0)) return false;
+    if(!chapters.valid(s.chapters))return false;
     if(!s.battle) return true;
     const b=s.battle;
     if(b.mode==="pair") return Array.isArray(b.rivals)&&b.rivals.length===2&&b.rivals.every(mon)&&Array.isArray(b.allies)&&
@@ -382,7 +395,8 @@ const MistGame = (() => {
   }
   function loadSave(previous){
     const s=F.upgrade(previous);
-    if(!s||!["coast","cove"].includes(s.region))return null;
+    if(!s||!Object.hasOwn(T.areas,s.region))return null;
+    s.chapters??=chapters.fresh();
     if(!T.walkable(s.pos,s.region)){
       const ground=T.nearestGround(s.pos,s.region);
       if(!ground)return null;
@@ -390,6 +404,6 @@ const MistGame = (() => {
     }
     return valid(s)?s:null;
   }
-  return {stat,threshold,makeMon,fresh,start,restore,gain,encounter,act,leaveBattle,step,valid,loadSave,startPair,pairRound,availableMoves,sail,canDuel};
+  return {stat,threshold,makeMon,fresh,start,restore,gain,encounter,act,leaveBattle,step,valid,loadSave,startPair,pairRound,availableMoves,sail,chapters,canBeacon,hasLocal,canDuel};
 })();
 if(typeof module!=="undefined") module.exports=MistGame;
