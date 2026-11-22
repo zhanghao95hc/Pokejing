@@ -31,34 +31,58 @@ const MistGame = (() => {
     for(const mon of s.party) {mon.hp=stat(mon,0);mon.status="";for(const sk of mon.skills) sk.pp=moves[sk.id][4];}
     s.supply.bells=Math.max(s.supply.bells,6);s.supply.salves=Math.max(s.supply.salves,3);
   }
-  function gain(mon,amount,lines) {
-    if(mon.level>=50) return;
+  function evolveReady(mon,lines,transitions){
+    while(C.evolutions[mon.kind]&&mon.level>=C.evolutionLevels[mon.kind]){
+      const from=mon.kind,oldMax=stat(mon,0);
+      mon.kind=C.evolutions[from];
+      if(mon.hp>0)mon.hp+=stat(mon,0)-oldMax;
+      transitions.push(from);
+      lines.push(species[from].name+"进化为"+name(mon)+"！");
+    }
+  }
+  function gain(mon,amount,lines){
+    const transitions=[];
+    evolveReady(mon,lines,transitions);
+    if(mon.level>=50)return transitions;
     mon.xp+=amount;
     lines.push(name(mon)+"获得 "+amount+" 点经验。");
-    while(mon.xp>=threshold(mon.level)&&mon.level<50) {
-      const old=stat(mon,0); mon.xp-=threshold(mon.level);mon.level++;
+    while(mon.xp>=threshold(mon.level)&&mon.level<50){
+      const oldMax=stat(mon,0);
+      mon.xp-=threshold(mon.level);mon.level++;
+      if(mon.hp>0)mon.hp+=stat(mon,0)-oldMax;
       lines.push(name(mon)+"升至 Lv."+mon.level+"！");
-      if(C.evolutions[mon.kind]&&mon.level>=C.evolutionLevels[mon.kind]) {
-        const before=name(mon);mon.kind=C.evolutions[mon.kind];
-        lines.push(before+"进化为"+name(mon)+"！");
-      }
-      if(mon.hp>0) mon.hp+=stat(mon,0)-old;
-      if(mon.level===7) {
+      evolveReady(mon,lines,transitions);
+      if(mon.level===7){
         const id=species[mon.kind].moves[3];
         if(!mon.skills.some(k=>k.id===id)&&mon.skills.length<4){mon.skills.push({id,pp:moves[id][4]});lines.push("领悟了「"+moves[id][0]+"」。");}
         else lines.push("可在整备招式中选择「"+moves[id][0]+"」。");
       }
     }
-    if(mon.level===50) mon.xp=0;
+    if(mon.level===50)mon.xp=0;
+    return transitions;
+  }
+  function recordGrowth(s,mon,transitions){
+    for(const kind of [...transitions,mon.kind]){
+      record(s.caught,kind);record(s.seen,kind);
+    }
+    if(transitions.length)(s.pendingEvolutions??=[]).push(...transitions);
   }
   function awardExperience(s,index,amount){
-    const mon=s.party[index],from=mon.kind;
-    gain(mon,amount,s.battle.lines);
-    if(mon.kind!==from)(s.pendingEvolutions??=[]).push(from);
-    record(s.caught,mon.kind);record(s.seen,mon.kind);
+    const mon=s.party[index];
+    const transitions=gain(mon,amount,s.battle.lines);
+    recordGrowth(s,mon,transitions);
+  }
+  function evolvePartner(s,index){
+    const mon=s.party[index];
+    if(s.battle||!mon)return false;
+    const transitions=[],lines=[];
+    evolveReady(mon,lines,transitions);
+    if(!transitions.length)return false;
+    recordGrowth(s,mon,transitions);
+    s.notice=lines.join(" ");return true;
   }
   const stages=()=>({attack:0,guard:0,speed:0,special:0});
-  const localKinds=["crab","moth","snail","fry","glider","kui","otter"];
+  const localKinds=["crab","moth","snail","fry","kui","otter"];
   function sail(s){
     if(!s.badge||s.battle)return false;
     const site=T.near(s.pos,s.region);
@@ -68,7 +92,7 @@ const MistGame = (() => {
     s.grace=5;s.notice=s.region==="cove"?"盐镜湾到了。先去渔舍借一根钓竿，或到浅滩寻找本地伙伴。":"渡船回到了雾岬研究站。";return true;
   }
   function canBeacon(s){return s.badge||(s.camp&&s.chapters.ridge===2);}
-  function hasLocal(s){return localKinds.some(k=>s.caught.includes(k));}
+  function hasLocal(s){return s.caught.some(k=>localKinds.includes(C.familyOf[k]?.[0]));}
   function canDuel(s){return s.badge&&s.region==="cove"&&(s.secondBadge||s.chapters.marsh===2&&hasLocal(s));}
   function wildHabitat(s,fish,track){
     if(track==="nest")return ["twig","tuft","tuft"];
@@ -404,6 +428,6 @@ const MistGame = (() => {
     }
     return valid(s)?s:null;
   }
-  return {stat,threshold,makeMon,fresh,start,restore,gain,encounter,act,leaveBattle,step,valid,loadSave,startPair,pairRound,availableMoves,sail,chapters,canBeacon,hasLocal,canDuel};
+  return {stat,threshold,makeMon,fresh,start,restore,gain,evolvePartner,encounter,act,leaveBattle,step,valid,loadSave,startPair,pairRound,availableMoves,sail,chapters,canBeacon,hasLocal,canDuel};
 })();
 if(typeof module!=="undefined") module.exports=MistGame;

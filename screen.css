@@ -197,3 +197,16 @@ body[data-scene=battle] #top { top: max(14px,env(safe-area-inset-top)); }
 .ridge .foot-grass { background-image: url("assets/color/ridge-grass.webp"); }
 .marsh .foot-grass { background-image: url("assets/color/marsh-reeds.webp"); }
 .ridge .field-cover, .marsh .field-cover { filter: contrast(1.32) saturate(1.5) brightness(.87); }
+
+.dex-family { margin: 0 0 18px; }
+.dex-family > h3 { margin: 0 0 6px; font-family: var(--brush); color: #34514b; }
+.menu-body .dex-family .dex-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.dex-family .member-info small { color: #75572f; }
+.dex-family .plate { display: grid; grid-template: auto minmax(0,1fr) / minmax(0,1fr); justify-items: center; }
+.dex-family .plate-head { position: static; width: 100%; padding: 4px 6px 0; gap: 1px 4px; flex-wrap: wrap; }
+.dex-family .spec-art { width: 94%; height: 100%; min-height: 0; padding-bottom: 3px; }
+@media (max-width: 590px) {
+  .menu-body .dex-family .dex-grid { grid-template-columns: 1fr; }
+  .dex-family .dex-entry { display: grid; grid-template-columns: 37% 1fr; }
+  .menu-body .dex-family .plate { height: 100%; min-height: 116px; }
+}

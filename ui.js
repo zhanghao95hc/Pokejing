@@ -340,9 +340,18 @@ function runMistcape() {
     return `<section class="wrap page"><div class="page-title"><div><p>携带 ${s.party.length} / 6 位伙伴　·　徽章 ${Number(s.badge)+Number(s.secondBadge)} / 2</p></div>${btn(icon("bag")+" 行囊","bag")}</div><div class="party-list">${s.party.map((m,i)=>`<article class="member ${m.kind} ${species[m.kind].type}">${plate(m.kind)}<div class="member-info"><h2>${species[m.kind].name}</h2><p>Lv.${m.level}　${species[m.kind].role}　${i===0?"首发":""}</p>${hp(m)}<div class="hp-txt">EXP ${m.xp} / ${G.threshold(m.level)}</div><div class="tools">${btn("详情","detail",i)}${i>0?btn("设为首发","lead",i,"",!!s.battle||!m.hp):""}</div></div></article>`).join("")}</div>${s.box.length?`<div class="subhead"><h2>研究站寄养</h2></div><div class="panel"><p class="note">在研究站可将寄养伙伴与队员交换。</p>${s.box.map((m,i)=>`<div class="dialog-row"><span>${species[m.kind].name}　Lv.${m.level}</span>${btn("交换队员","boxSelect",i,"",!!s.battle||activeSite()!=="lab")}</div>`).join("")}</div>`:""}</section>`;
   }
   function dex(){
-    return `<section class="wrap page"><div class="page-title"><div><p>已结缘 ${s.caught.length} / ${Object.keys(species).length} 种　·　野外与对战目击 ${s.seen.length} 种</p></div></div><div class="dex-grid">${Object.entries(species).map(([k,d])=>{
-      const known=C.starters.includes(k)||s.seen.includes(k);
-      return `<article class="dex-entry ${k} ${d.type}">${known?plate(k):`<div class="plate"><div class="plate-head"><span class="num">谱 ${d.no}</span></div>${icon("compass")}</div>`}<div class="member-info"><h2>${known?d.name:"尚待发现"}</h2><p>${known?d.desc:d.habitat?d.habitat:Number(d.no)>9?"搭船前往盐镜湾，观察当地生态。":Number(d.no)>6?"培养初始伙伴至 Lv.9，观察它的进化。":"调查风铃草甸，补齐这份观察记录。"}</p>${known?`<p class="note">${C.lineage(k)}${d.habitat?"　·　"+d.habitat:""}</p>`:""}<span class="chip">${s.caught.includes(k)?"已结缘":s.seen.includes(k)?"已目击":known?"研究站记录":"未目击"}</span></div></article>`;}).join("")}</div></section>`;
+    const known=k=>C.starters.includes(k)||s.seen.includes(k)||s.caught.includes(k);
+    const card=(line,i)=>{
+      const k=line[i],d=species[k],stage=["初阶","中阶","终阶"][i];
+      const condition=i?"Lv."+C.evolutionLevels[line[i-1]]:"";
+      const hint=i?"由"+species[line[i-1]].name+"培养获得。":d.habitat||(k==="snail"?"在潮声浅滩垂钓时寻找。":["crab","moth"].includes(k)?"在盐镜湾的芦荡中寻找。":"在雾岬海岸的高草中寻找。");
+      const portrait=known(k)?plate(k):`<div class="plate"><div class="plate-head"><span class="num">谱 ${d.no}</span></div>${icon("compass")}</div>`;
+      return `<article class="dex-entry ${k} ${d.type}">${portrait}<div class="member-info"><small>${stage} ${condition}</small><h2>${known(k)?d.name:"尚待发现"}</h2><p>${known(k)?d.desc:hint}</p>${known(k)&&i===0&&!C.starters.includes(k)?`<p class="note">${hint}</p>`:""}<span class="chip">${s.caught.includes(k)?"已结缘":s.seen.includes(k)?"已目击":known(k)?"研究站记录":"未目击"}</span></div></article>`;
+    };
+    return `<section class="wrap page"><div class="page-title"><p>已结缘 ${s.caught.length} / ${Object.keys(species).length} 种形态　·　已目击 ${s.seen.length} 种　·　${C.lineages.length} 支谱系</p></div>${C.lineages.map(line=>{
+      const base=species[line[0]],title=known(line[0])?base.name+"谱系":"灵兽谱 "+base.no;
+      return `<section class="dex-family"><h3>${title}</h3><div class="dex-grid">${line.map((_,i)=>card(line,i)).join("")}</div></section>`;
+    }).join("")}</section>`;
   }
   function render(){
     clearWalk();resizeField.disconnect();field=null;
@@ -473,13 +482,16 @@ function runMistcape() {
 }
   function detail(i){
   const m=s.party[i],d=species[m.kind],[ability,explain]=F.abilities[F.ability(m)];
+  const line=C.familyOf[m.kind],stage=line.indexOf(m.kind);
+  const replayButtons=line.slice(0,stage).map((from,step)=>btn(stage===1?"重看进化":"重看第"+(step===0?"一":"二")+"次进化","replayEvolution",i+","+from)).join("");
+  const canEvolve=C.evolutions[m.kind]&&m.level>=C.evolutionLevels[m.kind]&&!s.battle;
   const manage=!s.battle,atDesk=["lab","hut"].includes(activeSite());
   modal(d.name,`<div class="dossier"><div class="portrait">${art(m.kind)}</div><div>${elType(m.kind)}<h3>Lv.${m.level}　${d.role}</h3>${hp(m)}<small>EXP ${m.xp} / ${G.threshold(m.level)}</small></div></div>
   <div class="skill-notes"><p><b>性格</b> ${F.disposition(m)}</p><p><b>特性</b> ${ability} · ${explain}</p><p><b>携带</b> ${F.stock[m.held]?.name||"空"}</p></div>
   <table class="stat-table"><thead><tr><th>能力</th><th>数值</th><th>个体值</th><th>努力值</th></tr></thead><tbody>${F.labels.map((n,j)=>`<tr><th>${n}</th><td>${G.stat(m,j)}</td><td>${m.iv[j]}</td><td>${m.ev[j]}</td></tr>`).join("")}</tbody></table>
-  <p class="note">累计努力值 ${m.ev.reduce((a,b)=>a+b,0)} / 510　·　${C.lineage(m.kind)}</p>
+  <p class="note">累计努力值 ${m.ev.reduce((a,b)=>a+b,0)} / 510</p><p class="note">第 ${stage+1} / 3 阶段　·　${C.lineage(m.kind)}</p>
   ${m.skills.map(sk=>`<div class="dialog-row"><div><b>${moves[sk.id][0]}</b><p class="note">${moveInfo(sk.id)}</p></div><small>PP ${sk.pp}</small></div>`).join("")}
-  <div class="dialog-foot tools">${btn("更换携带物","equipment",i,"",!manage)}${btn("整备招式","dojo",i,"",!manage||!atDesk)}${Object.values(C.evolutions).includes(m.kind)?btn("重看进化","replayEvolution",i):""}${btn("返回","close")}</div>${!atDesk?"<p class='note dialog-foot'>在雾岬研究站或潮汐小屋可以整备招式。</p>":""}`);
+  <div class="dialog-foot tools">${btn("更换携带物","equipment",i,"",!manage)}${btn("整备招式","dojo",i,"",!manage||!atDesk)}${canEvolve?btn("现在进化","evolvePartner",i,"primary"):""}${replayButtons}${btn("返回","close")}</div>${!atDesk?"<p class='note dialog-foot'>在雾岬研究站或潮汐小屋可以整备招式。</p>":""}`);
 }
   function cast(){
   if(s.battle||!s.rod||!atFishingBank())return;
@@ -579,9 +591,14 @@ function runMistcape() {
       case "hook":if(fishReady&&atFishingBank()&&G.encounter(s,"fish")){fishReady=false;closeDialog();closeMenu();save();render();}break;
       case "close":closeDialog();break;
       case "detail":detail(Number(arg));break;
+      case "evolvePartner":{
+        const i=Number(arg);
+        if(G.evolvePartner(s,i)){save();closeDialog();render();showEvolutions().then(()=>detail(i));}
+        break;
+      }
       case "replayEvolution":{
-        const from=Object.keys(C.evolutions).find(k=>C.evolutions[k]===s.party[Number(arg)]?.kind);
-        if(from){closeDialog();showEvolutions(from).then(()=>detail(Number(arg)));}
+        const [index,from]=arg.split(","),i=Number(index),kind=s.party[i]?.kind,line=C.familyOf[kind];
+        if(line?.slice(0,line.indexOf(kind)).includes(from)){closeDialog();showEvolutions(from).then(()=>detail(i));}
         break;
       }
       case "lead":if(!s.battle&&s.party[arg]?.hp){[s.party[0],s.party[arg]]=[s.party[arg],s.party[0]];save();render();}break;

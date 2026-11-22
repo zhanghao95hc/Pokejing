@@ -51,7 +51,7 @@ for(const [region,gate,track,kinds] of [["ridge","camp","nest",["twig","ape","tu
     s.battle.result="loss";G.leaveBattle(s);assert.equal(s.region,region==="ridge"?"coast":"cove");assert.ok(G.valid(s));
   });
 }
-test("两条新进化路线各按等级触发，入谱并保存演出；四种独立灵兽能完整成长",()=>{
+test("两条新进化路线各按等级触发，入谱并保存演出；四种山泽伙伴能进化至终阶",()=>{
   for(const [id,to] of [["twig","raven"],["fry","glider"]]){
     const s=ready(),m=G.makeMon(id,C.evolutionLevels[id]-1,fixed);
     s.party=[m];m.xp=G.threshold(m.level)-1;G.encounter(s,"wild",fixed);
@@ -62,7 +62,7 @@ test("两条新进化路线各按等级触发，入谱并保存演出；四种�
     assert.ok(fs.existsSync(path.join(__dirname,"../assets/cinema/evo-"+id+".webp")));
   }
   for(const id of ["ape","tuft","kui","otter"]){
-    const m=G.makeMon(id,5,fixed);G.gain(m,99999,[]);assert.equal(m.kind,id);assert.equal(m.level,50);
+    const m=G.makeMon(id,5,fixed);G.gain(m,99999,[]);assert.equal(m.kind,C.familyOf[id][2]);assert.equal(m.level,50);
     F.growth(m,m);assert.ok(m.ev.every(Number.isFinite));assert.ok(F.abilities[F.ability(m)]);
   }
   for(const id of Object.keys(C.species))for(const view of ["","-back"]){

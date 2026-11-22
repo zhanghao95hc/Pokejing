@@ -250,12 +250,40 @@ const MistTheater=(()=>{
       }
     }finally{stop();document.removeEventListener("visibilitychange",hide);desk.inert=false;title.classList.remove("showing-move");skip.remove();}
   }
+  const growthCaptions={
+      moss:["竹角抽枝","青鳞渐生","松冠舒展"],ember:["尾焰渐盛","双尾分岔","三尾舒展"],tide:["荷鳍舒张","鲤须渐长","螭爪初成"],twig:["雏羽换色","翼纹舒展","铜尾分岔"],fry:["鳍缘抽长","金翼展开","长须迎潮"],
+      grove:["松冠抽梢","金芽初结","长鬃聚岚"],
+      pyre:["尾焰分束","霞尾成扇","九焰齐明"],
+      sail:["荷瓣展翼","金须垂浪","龙翼舒张"],
+      wind:["芦羽初生","颈羽抽长","笙冠成形"],
+      reedcrane:["翼尖染金","云翎垂落","长翮舒展"],
+      stone:["砚纹叠起","松苔生根","墨池加深"],
+      inkback:["石脊拔高","碑纹浮出","青碑立定"],
+      spark:["铜纹成对","颈毛分束","双铎垂落"],
+      bellbadger:["肩鬃蓬起","雷纹相接","铜铎成列"],
+      crab:["瓦缘挑起","檐角弯成","双螯展宽"],
+      eavecrab:["重瓦相扣","飞檐叠起","阁顶结金"],
+      moth:["桂纹生脉","月弧初弯","桂花抱翅"],
+      cassiamoth:["月斑盈满","银翅拖长","双翼映月"],
+      snail:["壳脊加厚","青铜分层","三音初和"],
+      chimingconch:["钟脊高升","潮珠聚光","洪钟定音"],
+      raven:["铜翎舒张","玄羽覆肩","衔枝负石"],
+      glider:["金鳍舒展","鳞光点星","双翼迎潮"],
+      ape:["耳缘染翠","肩臂伸长","白耳听泉"],
+      echoape:["石纹覆臂","松鬃披肩","双掌托山"],
+      tuft:["尾绒聚香","耳畔含苞","桃瓣初绽"],
+      plumcat:["桃花舒瓣","春鬃围颈","长尾成帚"],
+      kui:["铜纹成环","腹鼓初张","双环共振"],
+      rainkui:["长鬃化云","雷纹贯腹","苍鼓应霆"],
+      otter:["前爪捧珠","赤胸显纹","珠光照水"],
+      pearlward:["玉纹沿肩","波尾舒卷","长身分潮"]
+  };
   async function evolution(from){
     const to=catalog.evolutions[from],scene=document.createElement("dialog");
     scene.className="evolution-scene";scene.setAttribute("aria-label","灵兽进化");document.body.append(scene);
     scene.innerHTML='<div class="evo-paint"><div class="evo-portraits"></div></div><div class="evo-caption"><div><small>灵兽进化</small><h2 aria-live="polite"></h2></div><button class="btn" type="button">跳过演出</button></div>';
     const paint=scene.querySelector(".evo-portraits"),title=scene.querySelector("h2"),button=scene.querySelector("button"),label=scene.querySelector("small");
-    const stages={moss:["竹角抽枝","青鳞渐生","松冠舒展"],ember:["尾焰渐盛","双尾分岔","三尾舒展"],tide:["荷鳍舒张","鲤须渐长","螭爪初成"],twig:["雏羽换色","翼纹舒展","铜尾分岔"],fry:["鳍缘抽长","金翼展开","长须迎潮"]};
+
     const names=k=>catalog.species[k].name,young="assets/color/"+from+".webp",adult="assets/color/"+to+".webp",strip=folder+"evo-"+from+".webp";
     const layers=[young,strip,strip,strip,adult].map((url,i)=>{
       const layer=node("div","evo-form",paint);
@@ -280,13 +308,13 @@ const MistTheater=(()=>{
           el.style.transform="translateY("+(-Math.sin(t*Math.PI)*3)+"%) scale("+(.84+t*.16)+")";
         });
         if(paint.dataset.phase!==String(phase)){
-          paint.dataset.phase=phase;label.textContent=phase>0&&phase<4?stages[from][phase-1]:"灵兽进化";
+          paint.dataset.phase=phase;label.textContent=phase>0&&phase<4?growthCaptions[from][phase-1]:"灵兽进化";
         }
         if(phase===4)title.textContent=names(to);
       });
       finished=true;scene.dataset.complete="true";paint.dataset.phase=4;
       layers.forEach((el,i)=>{el.style.opacity=i===4?1:0;el.style.transform="none";});
-      label.textContent="进化完成";title.textContent=names(from)+"进化为"+names(to);button.textContent="继续";
+      label.textContent=catalog.familyOf[from][2]===to?"终阶 · 进化完成":"中阶 · 进化完成";title.textContent=names(from)+"进化为"+names(to);button.textContent="继续";
       await confirmed;
     }finally{controller.abort();scene.close();scene.remove();}
   }
