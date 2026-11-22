@@ -145,13 +145,97 @@ const MistTheater=(()=>{
       });
     }finally{layer.remove();reaction.forEach(a=>a.cancel());}
   }
-  async function turn(arena,events){
+  async function playBell(arena,seats,event,caption,signal,ring){
+    const ally=seats.ally0.img,foe=seats[event.target.key].img;
+    const bellArt="assets/color/item-bells.webp",ribbonArt=folder+"bond-ribbons.webp";
+    const name=catalog.species[event.target.kind].name,still=reduced();
+    caption.textContent="Levi 投出了结缘铃";
+    await Promise.all([bellArt,ribbonArt,ally.src,foe.src].map(url=>loadForTurn(url,signal)));
+    if(signal.aborted)return;
+
+    const layer=node("div","fx-layer bond-layer",arena);
+    layer.setAttribute("aria-hidden","true");
+    const spirit=node("img","bond-spirit",layer),bell=node("img","bond-bell",layer);
+    const silk=node("i","bond-ribbon",layer);
+    spirit.src=foe.src;spirit.alt="";bell.src=bellArt;bell.alt="";
+    silk.style.backgroundImage='url("'+ribbonArt+'")';
+    let origin,target,mouth,floor,bellSize,silkSize;
+    function measure(){
+      const a=center(ally,arena),w=arena.clientWidth,h=arena.clientHeight;
+      target=center(foe,arena);
+      bellSize=Math.max(33,Math.min(w*.15,h*.2,target.h*.48));
+      silkSize=Math.max(bellSize*1.65,Math.min(w*.4,target.h*1.12));
+      origin={x:a.x*.72,y:Math.min(h-bellSize*.53,a.y+a.h*.36)};
+      mouth={x:target.x,y:Math.max(bellSize*.65,target.y-target.h*.22)};
+      floor={x:target.x,y:Math.min(h-bellSize*.65,target.y+target.h*.40)};
+      spirit.style.height=target.h+"px";bell.style.width=bellSize+"px";silk.style.width=silkSize+"px";
+    }
+    function pose(el,x,y,scale=1,angle=0,opacity=1){
+      el.style.transform=`translate(${x}px,${y}px) translate(-50%,-50%) rotate(${angle}deg) scale(${scale})`;
+      el.style.opacity=opacity;
+    }
+    function ribbon(row,t,x,y,scale=1,opacity=1){
+      const frame=Math.min(3,Math.floor(t*4));
+      silk.style.backgroundPosition=(frame*100/3)+"% "+(row*50)+"%";
+      pose(silk,x,y,scale,0,opacity);
+    }
+    async function phase(id,label,ms,draw){
+      if(signal.aborted)return;
+      layer.dataset.phase=id;caption.textContent=label;
+      await timeline(ms,signal,draw);
+    }
+    const mix=(a,b,t)=>a+(b-a)*t;
+    const resize=new ResizeObserver(measure);
+    try{
+      measure();resize.observe(arena);foe.classList.add("bond-hidden");
+      await phase("throw","Levi 投出了结缘铃",still?160:460,t=>{
+        const p=still?1:t;
+        pose(spirit,target.x,target.y);
+        pose(bell,mix(origin.x,mouth.x,p),mix(origin.y,mouth.y,p)-Math.sin(p*Math.PI)*arena.clientHeight*.23,1,still?0:mix(-65,8,p));
+        silk.style.opacity=0;
+      });
+      await phase("bind","结缘丝绕住了"+name,still?180:540,t=>{
+        const draw=clamp((t-.12)/.65),drop=clamp((t-.68)/.32);
+        pose(spirit,target.x,mix(target.y,mouth.y,draw),still?1:1-draw*.9,0,1-draw);
+        pose(bell,mouth.x,still?floor.y:mix(mouth.y,floor.y,drop*drop),1,still?0:8*(1-t));
+        ribbon(0,still?.7:t,target.x,mix(target.y,mouth.y,draw),1,Math.min(1,(1-t)*5));
+      });
+      for(let i=0;i<event.shakes&&!signal.aborted;i++){
+        ring?.([523,659,784][i]);
+        await phase("ring","结缘铃 · 第"+["一","二","三"][i]+"声",still?125:350,t=>{
+          silk.style.opacity=0;
+          const sway=still?0:Math.sin(t*Math.PI*2)*(1-t);
+          pose(bell,floor.x+sway*bellSize*.08,floor.y,1,sway*32);
+        });
+      }
+      if(signal.aborted)return;
+      if(event.shakes===3){
+        ring?.(988,true);
+        await phase("bonded","结缘成功 · "+name,still?550:1050,t=>{
+          const back=still?0:clamp((t-.70)/.30);
+          const x=mix(floor.x,origin.x,back),y=mix(floor.y,origin.y,back)-Math.sin(back*Math.PI)*arena.clientHeight*.12;
+          pose(bell,x,y,1-back*.38,back*-20,1-back);
+          ribbon(1,still?1:clamp(t/.66),x,y-bellSize*.62,.83,1-back);
+        });
+      }else{
+        ring?.(292);
+        await phase("escaped",name+"挣脱了结缘丝",still?500:790,t=>{
+          const spring=still?1:1-(1-clamp(t/.58))**3;
+          const bounce=still?0:Math.sin(Math.PI*spring);
+          pose(spirit,target.x,mix(floor.y,target.y,spring)-bounce*target.h*.20,.16+.84*spring+bounce*.18,0,spring);
+          pose(bell,floor.x+(still?0:t*bellSize*.95),floor.y+(still?0:(t*t-.35*t)*bellSize),1-.18*t,still?0:65*t,1-clamp(t/.72));
+          ribbon(2,still?.6:t,target.x,target.y,.84+.16*spring,Math.min(1,(1-t)*4));
+        });
+      }
+    }finally{resize.disconnect();foe.classList.remove("bond-hidden");layer.remove();}
+  }
+  async function turn(arena,events,ring){
     if(!arena||!events.length)return;
     const controller=new AbortController(),seats=slots(arena);
     const title=arena.closest(".battle").querySelector(".page-title"),caption=title.querySelector("p");
     caption.setAttribute("aria-live","polite");
     const skip=node("button","btn fx-skip",title);
-    skip.type="button";skip.textContent="略过招式";
+    skip.type="button";skip.textContent=events[0].type==="bell"?"略过演出":"略过招式";
     const stop=()=>controller.abort();
     const hide=()=>{if(document.hidden)stop();};
     skip.addEventListener("click",stop);
@@ -159,7 +243,11 @@ const MistTheater=(()=>{
     title.classList.add("showing-move");
     const desk=arena.parentElement.querySelector(".battle-desk");desk.inert=true;
     try{
-      for(const event of events){if(controller.signal.aborted)break;await playMove(arena,seats,event,caption,controller.signal);}
+      for(const event of events){
+        if(controller.signal.aborted)break;
+        if(event.type==="bell")await playBell(arena,seats,event,caption,controller.signal,ring);
+        else await playMove(arena,seats,event,caption,controller.signal);
+      }
     }finally{stop();document.removeEventListener("visibilitychange",hide);desk.inert=false;title.classList.remove("showing-move");skip.remove();}
   }
   async function evolution(from){

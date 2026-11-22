@@ -7,6 +7,38 @@ function single(){
   return s;
 }
 function teach(mon,move){mon.skills=[{id:move,pp:C.moves[move][4]}];}
+for(const shakes of [0,1,2,3]){
+  test(`结缘铃记录实际的 ${shakes} 声铃响，挣脱先于对手行动`,()=>{
+    const s=single(),foe=s.battle.rivals[0],events=[];
+    teach(foe,"bump");
+    const plain=structuredClone(s);
+    function rolls(){
+      const draws=Array(shakes).fill(.1).concat(.99);
+      return ()=>draws.shift()??.45;
+    }
+    assert.ok(G.act(s,"bell",undefined,rolls(),events));
+    assert.ok(G.act(plain,"bell",undefined,rolls()));
+    assert.deepEqual(s,plain);
+    assert.equal(events[0].type,"bell");assert.equal(events[0].shakes,shakes);
+    assert.equal(events[0].target.kind,foe.kind);assert.equal(events[0].target.key,"foe0");
+    assert.equal(s.supply.bells,5);
+    if(shakes===3){
+      assert.equal(s.battle.result,"caught");assert.equal(events.length,1);assert.equal(s.party.length,2);
+    }else{
+      assert.equal(s.battle.result,null);assert.equal(events[1].source.key,"foe0");assert.equal(s.party.length,1);
+    }
+  });
+}
+test("满队结缘进入寄养，无法投铃时不产生演出",()=>{
+  const s=single(),events=[];
+  while(s.party.length<6)s.party.push(G.makeMon("moss",5,fixed));
+  s.battle.mode="camp";
+  assert.equal(G.act(s,"bell",undefined,fixed,events),false);assert.equal(events.length,0);
+  s.battle.mode="wild";assert.ok(G.act(s,"bell",undefined,()=>0,events));
+  assert.equal(s.supply.bells,5);assert.equal(s.party.length,6);assert.equal(s.box.length,1);
+  assert.equal(events[0].shakes,3);assert.equal(s.battle.result,"caught");
+  assert.equal(G.act(s,"bell",undefined,fixed,events),false);assert.equal(events.length,1);
+});
 test("画面事件按实际出手顺序记录，麻痹或睡眠未出招不播放",()=>{
   const s=single(),ally=s.party[0],foe=s.battle.rivals[0];
   teach(ally,"dash");teach(foe,"bump");foe.status="sleep";foe.sleep=1;

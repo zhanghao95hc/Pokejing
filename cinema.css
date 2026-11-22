@@ -5,6 +5,12 @@
 }
 .showing-move > [data-do=history] { display: none; }
 .showing-move p { color: #235e58; font-weight: 700; }
+.bond-hidden { visibility: hidden; }
+.bond-layer > * { position: absolute; top: 0; left: 0; pointer-events: none; will-change: transform, opacity; }
+.bond-spirit { width: auto; }
+.bond-bell { height: auto; }
+.bond-ribbon { aspect-ratio: 1; background-size: 400% 300%; background-repeat: no-repeat; }
+.bond-portrait { width: 58px; height: 58px; object-fit: contain; }
 .evolution-scene {
   width: min(690px, 94vw); max-height: 94dvh; padding: 0; overflow: auto;
   border: 1px solid #b79c63; border-radius: 5px; background: #faf4e5; color: #19373d;

@@ -79,6 +79,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 #gameMenu[open] { display: flex; flex-direction: column; }
 #gameMenu::backdrop { background: #0d25295e; }
 #gameMenu[data-page=team], #gameMenu[data-page=dex] { width: min(680px,100%); }
+#gameMenu[data-page=site] {
+  inset: 0; margin: auto; width: min(400px,calc(100% - 32px)); height: fit-content;
+  max-height: 90dvh; border: 1px solid #a88f61; border-radius: 5px;
+}
+#gameMenu[data-page=site] .menu-bar { min-height: 56px; padding: 6px 16px; }
+#gameMenu[data-page=site] .spot-panel { border: 0; background: transparent; padding: 0; }
+#gameMenu[data-page=site] .spot-panel > p:first-child { margin-top: 0; }
+#gameMenu[data-page=site] .tools { display: grid; gap: 8px; }
+#gameMenu[data-page=site] .btn { min-height: 44px; }
+.spot-panel .site-feedback:empty { margin: 0; }
 .menu-bar {
   display: flex; flex: none; align-items: center; gap: 12px; min-height: 69px;
   padding: max(12px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) 12px 22px;

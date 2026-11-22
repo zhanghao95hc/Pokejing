@@ -245,6 +245,7 @@ const MistGame = (() => {
       s.supply.bells--;const statusBonus=foe.status ? .12 : 0;
       const chance=clamp(.25+.69*(1-foe.hp/stat(foe,0))+statusBonus,.2,.97);
       let shakes=0;while(shakes<3&&rng()<Math.cbrt(chance))shakes++;
+      events?.push({type:"bell",target:snapshot(seat("foe0",foe,b.foeStage)),shakes});
       b.lines.push(["结缘铃晃了晃。","一声铃响。","两声铃响……","三声铃响！"][shakes]);
       if(shakes===3) {
         const full=s.party.length>=6;(full?s.box:s.party).push(foe);record(s.caught,foe.kind);
