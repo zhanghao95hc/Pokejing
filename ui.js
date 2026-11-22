@@ -11,8 +11,11 @@ function runMistcape() {
     const raw=localStorage.getItem(KEY);
     if(raw){const previous=JSON.parse(raw);if(previous?.version===1&&!localStorage.getItem(KEY+".v1"))localStorage.setItem(KEY+".v1",raw);const candidate=G.loadSave(previous);if(candidate){s=candidate;loaded=true;}else saveError=true;}
   } catch {saveError=true;}
-  let facing="down",stride=1,walkEnd=null,fishTimer=null,fishReady=false;
-  let tab="adventure",selected=s.starter||"moss",walkTimer=null,toastTimer=null,audio=null,boxIndex=null;
+  let facing="down",field=null,segment=null,journey=null,queuedDirection=null;
+  let frameRequest=0,gait=0,fishTimer=null,fishReady=false;
+  const tileMs=136,cycleTiles=4;
+  const lessMotion=matchMedia("(prefers-reduced-motion: reduce)");
+  let tab="adventure",selected=s.starter||"moss",toastTimer=null,audio=null,boxIndex=null;
   const heldDirections=new Map();
   let previousSpot="";
   const paths={
@@ -69,7 +72,16 @@ function runMistcape() {
     } catch {}
   }
   function toast(msg){$("#toast").textContent=msg;$("#toast").classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("#toast").classList.remove("show"),2100);}
-  function stopWalk(){clearInterval(walkTimer);walkTimer=null;heldDirections.clear();}
+  function clearWalk(){
+    cancelAnimationFrame(frameRequest);frameRequest=0;
+    segment=null;journey=null;queuedDirection=null;heldDirections.clear();
+  }
+  function stopWalk(){
+    const enteringBattle=segment&&s.battle;
+    clearWalk();
+    if(enteringBattle){render();beep(580,true);}
+    else if(field){paintPosition(s.pos,0);syncMap();}
+  }
   function head(){
     $("#top").innerHTML=`<div class="brand">${brandMark}<div class="wordmark">雾岬物语</div></div>
     <nav class="nav" aria-label="主菜单">${[["adventure","compass","冒险"],["team","team","队伍"],["dex","book","图鉴"]].map(([id,i,n])=>`<button data-do="tab" data-arg="${id}" ${tab===id?'aria-current="page"':""}>${icon(i)}${n}</button>`).join("")}</nav>
@@ -122,7 +134,7 @@ function runMistcape() {
   function world(){
   const places=T.siteList(s.region),region=s.region==="cove"?"盐镜湾":"雾岬海岸",lead=s.party.find(m=>m.hp>0)||s.party[0];
   return `<section class="wrap page field-page"><div class="page-title"><div><h1>${region}</h1><p>${nextGoal()}</p></div><div class="tools">${btn(icon("bag")+" 行囊","bag")}</div></div>
-  <div class="map-layout"><div><div class="game-window"><div class="instrument"><span>${icon("compass")} ${region}航图</span><span class="map-instruments">${weatherBadge()}<button data-do="camera" aria-pressed="${!!s.follow}" title="切换地图视角">${s.follow?"显示全图":"跟随 Levi"}</button></span></div><div class="map-viewport"><div class="map ${s.region}" id="map" role="group" aria-label="${region}可探索地图" tabindex="0"><canvas class="field-cover" width="1200" height="800" aria-hidden="true"></canvas>${Object.entries(places).map(([k,d])=>`<button class="map-pin ${k===T.near(s.pos,s.region)?"near":""}" style="left:${d.at[0]}%;--site-y:${d.at[1]}%" data-do="travel" data-arg="${k}" aria-label="前往${d.name}">${icon(d.icon)}${d.short}</button>`).join("")}<img class="walker" alt="Levi" draggable="false"><i class="foot-grass" hidden aria-hidden="true"></i></div></div><div class="world-strip"><span class="ground-name"></span><span>${icon("award")} 徽章 ${Number(s.badge)+Number(s.secondBadge)} / 2</span><span>潮币 ${s.coins}</span></div></div>
+  <div class="map-layout"><div><div class="game-window"><div class="instrument"><span>${icon("compass")} ${region}航图</span><span class="map-instruments">${weatherBadge()}<button data-do="camera" aria-pressed="${!!s.follow}" title="切换地图视角">${s.follow?"显示全图":"跟随 Levi"}</button></span></div><div class="map-viewport"><div class="map ${s.region}" id="map" role="group" aria-label="${region}可探索地图" tabindex="0"><canvas class="field-cover" width="1200" height="800" aria-hidden="true"></canvas>${Object.entries(places).map(([k,d])=>`<button class="map-pin ${k===T.near(s.pos,s.region)?"near":""}" style="left:${d.at[0]}%;--site-y:${d.at[1]}%" data-do="travel" data-arg="${k}" aria-label="前往${d.name}">${icon(d.icon)}${d.short}</button>`).join("")}<div class="walker-track"><div class="walker" role="img" aria-label="Levi"></div><i class="foot-grass" hidden aria-hidden="true"></i></div></div></div><div class="world-strip"><span class="ground-name"></span><span>${icon("award")} 徽章 ${Number(s.badge)+Number(s.secondBadge)} / 2</span><span>潮币 ${s.coins}</span></div></div>
   <div class="touch-pad">${[["left","←"],["up","↑"],["down","↓"],["right","→"]].map(([k,n])=>`<button data-do="step" data-arg="${k}" aria-label="移动 ${n}">${n}</button>`).join("")}</div><p class="brief">${icon("book")}<span>${journalHTML(s.notice)}</span></p></div>
   <aside class="map-side"><div id="spot">${sitePanel()}</div><section class="panel"><h2>沿途地点</h2><div class="jump-list">${Object.entries(places).map(([k,d])=>`<button class="jump" data-do="travel" data-arg="${k}"><span class="jump-label">${icon(d.icon)}${d.name}</span>${icon("chevron")}</button>`).join("")}</div></section><button class="field-lead" data-do="detail" data-arg="${s.party.indexOf(lead)}">${art(lead.kind)}<span><small>当前首发 · Lv.${lead.level}</small><b>${species[lead.kind].name}</b>${hp(lead)}</span></button></aside></div></section>`;
 }
@@ -157,29 +169,37 @@ function runMistcape() {
     };
     grass.src="assets/color/"+(region==="cove"?"reeds":"grass")+".webp";
   }
-  function paintWalker(walker) {
-    const side=facing==="right"?"left":facing;
-    const source=`assets/color/levi-${side}${stride}.webp`;
-    if(walker.getAttribute("src")!==source) walker.src=source;
-    walker.classList.toggle("face-right",facing==="right");
+  function paintPosition(pos,cel){
+    const {track,walker,fringe,map}=field,[x,y]=T.toPct(pos);
+    track.style.transform="translate3d("+x+"%,"+y+"%,0)";
+    if(walker.dataset.facing!==facing)walker.dataset.facing=facing;
+    if(field.cel!==cel){
+      walker.style.backgroundPositionX=(cel*12.5)+"%";
+      field.cel=cel;
+    }
+    const grass=T.tallGrass({x:Math.round(pos.x),y:Math.round(pos.y)},s.region);
+    if(fringe.hidden===grass)fringe.hidden=!grass;
+    if(s.follow){
+      const zoom=1.85,pan=v=>Math.max(0,Math.min((zoom-1)*100,v*zoom-50));
+      map.style.transform="translate3d("+(-pan(x))+"%,"+(-pan(y))+"%,0) scale("+zoom+")";
+    }
   }
   function syncMap(){
-    const walker=$(".walker");if(!walker) return;
-    paintWalker(walker);
-    $(".instrument .weather-tag").outerHTML=weatherBadge();
-    const [x,y]=T.toPct(s.pos);walker.style.left=x+"%";walker.style.top=y+"%";
-    const inGrass=T.tallGrass(s.pos,s.region),fringe=$(".foot-grass");
-    fringe.hidden=!inGrass;fringe.style.left=x+"%";fringe.style.top=y+"%";
-    const surface=$(".ground-name");
-    surface.classList.toggle("in-grass",inGrass);
-    surface.textContent=inGrass?(s.region==="cove"?"芦荡 · 可能遇敌":"高草 · 可能遇敌"):"平地 · 安全";
-    const zoom=s.follow?1.85:1;
-    const pan=v=>Math.min((zoom-1)*100,Math.max(0,v*zoom-50));
-    $("#map").style.transform="translate("+(-pan(x))+"%,"+(-pan(y))+"%) scale("+zoom+")";
+    const weather=F.ambient(s);
+    if(field.weather!==weather){$(".instrument .weather-tag").outerHTML=weatherBadge();field.weather=weather;}
+    const inGrass=T.tallGrass(s.pos,s.region);
+    if(field.inGrass!==inGrass){
+      const surface=$(".ground-name");
+      surface.classList.toggle("in-grass",inGrass);
+      surface.textContent=inGrass?(s.region==="cove"?"芦荡 · 可能遇敌":"高草 · 可能遇敌"):"平地 · 安全";
+      field.inGrass=inGrass;
+    }
     const spot=sitePanel();
     if(spot!==previousSpot){$("#spot").innerHTML=spot;previousSpot=spot;}
-    document.querySelectorAll(".map-pin").forEach(b=>b.classList.toggle("near",b.dataset.arg===T.near(s.pos,s.region)));
-    hints();
+    const site=T.near(s.pos,s.region);
+    field.map.querySelectorAll(".map-pin").forEach(b=>b.classList.toggle("near",b.dataset.arg===site));
+    const saveStatus=saveError?"error":saved?"saved":"initial";
+    if(field.saveStatus!==saveStatus){hints();field.saveStatus=saveStatus;}
   }
   function meter(m,cls){
   const data=F.abilities[F.ability(m)];
@@ -228,8 +248,12 @@ function runMistcape() {
       return `<article class="dex-entry ${k} ${d.type}">${known?plate(k):`<div class="plate"><div class="plate-head"><span class="num">谱 ${d.no}</span></div>${icon("compass")}</div>`}<div class="member-info"><h2>${known?d.name:"尚待发现"}</h2><p>${known?d.desc:Number(d.no)>9?"搭船前往盐镜湾，观察当地生态。":Number(d.no)>6?"培养初始伙伴至 Lv.9，观察它的进化。":"调查风铃草甸，补齐这份观察记录。"}</p><span class="chip">${s.caught.includes(k)?"已结缘":s.seen.includes(k)?"已目击":known?"研究站记录":"未目击"}</span></div></article>`;}).join("")}</div></section>`;
   }
   function render(){
+    clearWalk();field=null;
     syncMusic();head();$("#screen").innerHTML=tab==="team"?members():tab==="dex"?dex():!s.starter?opening():s.battle?battles():world();
-    if(tab==="adventure"&&s.starter&&!s.battle){drawGrass($(".field-cover"),s.region);syncMap();}hints();
+    if(tab==="adventure"&&s.starter&&!s.battle){
+      field={map:$("#map"),track:$(".walker-track"),walker:$(".walker"),fringe:$(".foot-grass")};
+      drawGrass($(".field-cover"),s.region);paintPosition(s.pos,0);syncMap();
+    }else hints();
   }
   function closeDialog(){clearTimeout(fishTimer);fishReady=false;if($("#dialog").open) $("#dialog").close();}
   function modal(title,contents){
@@ -238,25 +262,68 @@ function runMistcape() {
   }
   function changeTab(id){stopWalk();closeDialog();tab=id;render();window.scrollTo(0,0);}
   function choose(k){selected=k;render();beep(380+C.starters.indexOf(k)*70);}
-  function takeStep(dest){
-    const old=s.pos;if(!G.step(s,dest)) return false;
-    facing=dest.x>old.x?"right":dest.x<old.x?"left":dest.y>old.y?"down":"up";
-    stride=s.steps%2?0:2;clearTimeout(walkEnd);walkEnd=setTimeout(()=>{stride=1;const w=$(".walker");if(w)paintWalker(w);},145);
-    save();if(s.battle){stopWalk();render();beep(580,true);}else {
-      syncMap();
-      if(!matchMedia("(prefers-reduced-motion: reduce)").matches)
-        $(".walker")?.animate([{translate:"0 0"},{translate:"0 -2px"},{translate:"0 0"}],{duration:120});
-    }
+  function takeStep(dest,start){
+    const from=s.pos;
+    if(!G.step(s,dest))return false;
+    facing=dest.x>from.x?"right":dest.x<from.x?"left":dest.y>from.y?"down":"up";
+    segment={from,to:dest,start};
+    save();
     return true;
   }
+  function nextStep(start){
+    if(!fieldOpen())return false;
+    const directions=new Set([queuedDirection,...[...heldDirections.values()].reverse()]);
+    queuedDirection=null;
+    directions.delete(null);
+    for(const k of directions){
+      const [dx,dy]=dir[k];
+      if(takeStep({x:s.pos.x+dx,y:s.pos.y+dy},start))return true;
+    }
+    if(directions.size)facing=directions.values().next().value;
+    if(journey){
+      if(journey.index<journey.path.length&&takeStep(journey.path[journey.index++],start))return true;
+      const site=journey.site;
+      if(site&&journey.index===journey.path.length&&T.near(s.pos,s.region)===site){
+        toast("已抵达"+T.siteList(s.region)[site].name);$("#spot .btn")?.focus({preventScroll:true});
+      }
+      journey=null;
+    }
+    return false;
+  }
+  function walkFrame(now){
+    frameRequest=0;
+    if(!segment||!field)return;
+    if(now>=segment.start+tileMs){
+      const boundary=segment.start+tileMs;
+      segment=null;gait=(gait+1)%cycleTiles;
+      if(s.battle){render();beep(580,true);return;}
+      syncMap();
+      // Carry the sub-frame remainder across tiles, without replaying long background stalls.
+      if(!nextStep(Math.max(boundary,now-32))){
+        paintPosition(s.pos,0);return;
+      }
+    }
+    const {from,to,start}=segment,t=Math.max(0,Math.min(1,(now-start)/tileMs));
+    let cel=1+Math.floor((gait+t)*8/cycleTiles)%8;
+    const stopping=!heldDirections.size&&!queuedDirection&&(!journey||journey.index===journey.path.length);
+    if(stopping&&t>.78)cel=cel<=4?1:5;
+    paintPosition({x:from.x+(to.x-from.x)*t,y:from.y+(to.y-from.y)*t},lessMotion.matches?0:cel);
+    frameRequest=requestAnimationFrame(walkFrame);
+  }
+  function startWalking(){
+    if(segment)return;
+    const now=performance.now();
+    if(nextStep(now))walkFrame(now);
+    else if(field)paintPosition(s.pos,0);
+  }
   function go(dest,site){
-    stopWalk();
+    if(!fieldOpen())return;
+    heldDirections.clear();queuedDirection=null;journey=null;
     const target=site?dest:T.nearestGround(dest,s.region,1,s.pos);
     const path=T.route(s.pos,target,s.region);
     if(!path){toast("这里无法落脚，请选择附近的陆地。");return;}
-    const arrive=()=>{stopWalk();if(site){toast("已抵达"+T.siteList(s.region)[site].name);$("#spot .btn")?.focus({preventScroll:true});}};
-    if(!path.length){arrive();return;}
-    let i=0;walkTimer=setInterval(()=>{if(s.battle||tab!=="adventure"){stopWalk();return;}if(!takeStep(path[i++])){stopWalk();return;}if(!s.battle&&i===path.length)arrive();},75);
+    journey={path,index:0,site};
+    startWalking();
   }
   function interact(k=activeSite()){
   stopWalk();if(!k||k!==activeSite()){toast("请先靠近可调查的地点。");return;}
@@ -347,35 +414,22 @@ function runMistcape() {
   }
   const dir={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
   function fieldOpen(){return s.starter&&!s.battle&&tab==="adventure"&&!$("#dialog").open;}
-  function moveDirection(k){
-    const [dx,dy]=dir[k];
-    return takeStep({x:s.pos.x+dx,y:s.pos.y+dy});
-  }
-  function advanceHeld(){
-    if(!fieldOpen()){stopWalk();return;}
-    const ordered=[...heldDirections.values()].reverse();
-    for(const k of ordered)if(moveDirection(k))return;
-    if(ordered.length&&facing!==ordered[0]){facing=ordered[0];paintWalker($(".walker"));}
-  }
   function pressDirection(source,k){
     if(!fieldOpen()||heldDirections.has(source))return;
-    const first=heldDirections.size===0;
-    if(first)stopWalk();
-    heldDirections.set(source,k);
-    if(first){walkTimer=setInterval(advanceHeld,100);advanceHeld();}
+    journey=null;queuedDirection=k;heldDirections.set(source,k);startWalking();
   }
   function releaseDirection(source){
-    if(heldDirections.delete(source)&&!heldDirections.size)stopWalk();
+    if(heldDirections.delete(source)&&!segment&&heldDirections.size)startWalking();
   }
   function action(op,arg){
-    if(presenting)return;
+    if(presenting||(segment&&s.battle))return;
     switch(op){
       case "select":choose(arg);break;
       case "depart":if(G.start(s,selected)){beep(523,true);save();render();window.scrollTo(0,0);}break;
       case "tab":changeTab(arg);break;
       case "sound":s.sound=!s.sound;save();head();hints();syncMusic();beep(660);toast(s.sound?"音乐和音效已开启":"声音已关闭");break;
       case "travel":go(T.toGrid(T.siteList(s.region)[arg].at),arg);break;
-      case "step":if(fieldOpen()){stopWalk();moveDirection(arg);}break;
+      case "step":pressDirection("tap",arg);releaseDirection("tap");break;
       case "interact":interact(arg||activeSite());break;
       case "camera":s.follow=!s.follow;stopWalk();save();render();break;
       case "bag":itemBag();break;

@@ -53,11 +53,6 @@ body { background: radial-gradient(ellipse at 100% 0, #ece3cc80, transparent 45%
 .map-pin { border-color: #395259; background: #fff9e9; color: #213c41; box-shadow: 0 1px 3px #182c3c42; }
 .map-pin.near, .map-pin:hover { background: #96382a; color: #fff7dd; border-color: #763324; }
 .map-pin.near:after, .map-pin:hover:after { border-top-color: #763324; }
-.walker {
-  filter: drop-shadow(.7px .7px 0 #172c3c) drop-shadow(-.7px -.7px 0 #172c3c)
-    drop-shadow(0 1px 0 #fff2d6) drop-shadow(0 -1px 0 #fff2d6)
-    drop-shadow(1px 0 0 #fff2d6) drop-shadow(-1px 0 0 #fff2d6) drop-shadow(0 2px 1px #16303dc9);
-}
 .btn.primary { background: #184e52; color: #fffae8; border-color: #143f44; box-shadow: inset 0 0 0 2px #184e52, inset 0 0 0 3px #bead7c; }
 .btn.primary:hover:enabled { background: #236165; }
 .move { background: #fcf6e7; border-color: #beb495; }
