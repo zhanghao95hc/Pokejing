@@ -11,7 +11,7 @@ function walk(s,site){
   assert.equal(T.near(s.pos,s.region),site);
 }
 test("第一枚徽章须完成山岭调查，错开灯窗可重试，交付只结算一次",()=>{
-  const s=ready();walk(s,"camp");assert.equal(J.crossing(s,"ridge"),false);s.camp=true;
+  const s=ready();s.expedition.ridge=3;walk(s,"camp");assert.equal(J.crossing(s,"ridge"),false);s.camp=true;
   assert.ok(J.crossing(s,"ridge"));assert.equal(s.region,"ridge");
   assert.equal(J.investigate(s,"south"),false);walk(s,"lantern");
   assert.equal(J.investigate(s,"south"),false);walk(s,"rack");assert.ok(J.investigate(s,"inspect"));
@@ -22,7 +22,7 @@ test("第一枚徽章须完成山岭调查，错开灯窗可重试，交付只�
   assert.ok(J.crossing(s,"ridge"));assert.deepEqual(s.pos,at(s,"camp"));walk(s,"beacon");assert.ok(G.encounter(s,"beacon",fixed));
 });
 test("第二枚徽章须完成潮尺与钟声，半段钟谱能读档，错误节奏重置，可从鸣沙泽获得本地记录",()=>{
-  let s=ready();s.badge=s.camp=true;assert.ok(G.sail(s));walk(s,"hut");assert.ok(J.crossing(s,"marsh"));
+  let s=ready();s.expedition.marsh=3;s.badge=s.camp=true;assert.ok(G.sail(s));walk(s,"hut");assert.ok(J.crossing(s,"marsh"));
   walk(s,"gauge");assert.ok(J.investigate(s,"inspect"));walk(s,"gong");assert.ok(J.investigate(s,"short"));
   s=G.loadSave(structuredClone(s));assert.equal(s.chapters.beats,1);assert.ok(J.investigate(s,"long"));assert.equal(s.chapters.beats,0);
   const berries=s.supply.berry;for(const beat of ["short","short","long"])assert.ok(J.investigate(s,beat));

@@ -13,7 +13,8 @@ function runMistcape() {
   } catch {saveError=true;}
   let facing="down",field=null,segment=null,journey=null,queuedDirection=null;
   let frameRequest=0,gait=0,fishTimer=null,fishReady=false;
-  const tileMs=136,cycleTiles=4;
+  const walkMs=136,runMs=68,cycleTiles=4;
+  let running=false;
   const lessMotion=matchMedia("(prefers-reduced-motion: reduce)");
   let selected=s.starter||"moss",toastTimer=null,audio=null,boxIndex=null;
   const heldDirections=new Map();
@@ -111,7 +112,7 @@ function runMistcape() {
       ["team","team","同行队伍",s.party.length+" / 6 位伙伴"],
       ["places","pin","沿途地点",regionName()],
       ["bag","bag","行囊",s.coins+" 潮币"],
-      ["dex","leaf","灵兽谱",s.caught.length+" / "+Object.keys(species).length+" 已结缘"],
+      ["dex","leaf","灵兽谱","沿岸 "+s.caught.filter(k=>species[k]&&!species[k].reserve).length+" / "+Object.values(species).filter(d=>!d.reserve).length+" 已结缘"],
       ["journal","book","冒险手记","目标与近况"],
       ["settings","settings","设置","视角与声音"]
     ];
@@ -126,10 +127,10 @@ function runMistcape() {
     else if(page==="dex")body=dex();
     else if(page==="bag")body=bagContents();
     else if(page==="places"){
-      const places=T.siteList(s.region),near=T.near(s.pos,s.region),[x,y]=T.toPct(s.pos);
+      const places=T.siteList(s.region),near=T.near(s.pos,s.region),[x,y]=T.toPct(s.pos,s.region);
       body=`<div class="travel-atlas ${s.region}"><div class="atlas-position" aria-label="Levi 的位置" style="left:${x}%;top:${y}%"></div>${Object.entries(places).map(([k,d])=>`<button class="atlas-pin" style="left:${d.at[0]}%;top:${d.at[1]}%" data-do="travel" data-arg="${k}" aria-label="前往${d.name}" ${s.battle?"disabled":""}>${icon(d.icon)}</button>`).join("")}</div>
       <div class="atlas-caption"><span>${icon("compass")}${regionName()}</span><span><i></i>Levi 的位置</span></div>
-      ${s.battle?"":sitePanel()}<div class="jump-list">${Object.entries(places).map(([k,d])=>`<button class="jump" data-do="travel" data-arg="${k}" ${s.battle?"disabled":""}><span class="jump-label">${icon(d.icon)}${d.name}</span>${k===near?"<small>所在地</small>":""}${icon("chevron")}</button>`).join("")}</div>`;
+      ${chapterMap()}${s.battle?"":sitePanel()}<div class="jump-list">${Object.entries(places).map(([k,d])=>`<button class="jump" data-do="travel" data-arg="${k}" ${s.battle?"disabled":""}><span class="jump-label">${icon(d.icon)}${d.name}</span>${k===near?"<small>所在地</small>":""}${icon("chevron")}</button>`).join("")}</div>`;
     }else if(page==="journal"){
       const grass=T.tallGrass(s.pos,s.region);
       body=`<section class="journal-block"><h3>当前目标</h3><p>${nextGoal()}</p></section>${chapterJournal()}<section class="journal-block"><h3>最近记录</h3><p>${journalHTML(s.notice)}</p></section><div class="journal-location"><b>${regionName()}</b>${weatherBadge(s.battle)}<span class="ground-name">${grass?"草丛 · 可能遇敌":"平地 · 安全"}</span></div>`;
@@ -137,7 +138,7 @@ function runMistcape() {
       body=`<div class="setting-list"><button data-do="sound" aria-pressed="${s.sound}">${icon(s.sound?"sound":"mute")}<b>音乐与音效</b><span>${s.sound?"已开启":"已关闭"}</span></button>
       <button data-do="camera" aria-pressed="${follow()}">${icon("compass")}<b>探索视角</b><span>${follow()?"跟随 Levi":"广角"}</span></button>
       ${document.fullscreenEnabled?`<button data-do="fullscreen" aria-pressed="${!!document.fullscreenElement}">${icon("expand")}<b>全屏显示</b><span>${document.fullscreenElement?"退出全屏":"进入全屏"}</span></button>`:""}</div>
-      <dl class="control-list"><div><dt>打开或关闭菜单</dt><dd>M</dd></div><div><dt>返回上一级</dt><dd>Esc</dd></div><div><dt>移动</dt><dd>WASD / 方向键</dd></div><div><dt>调查</dt><dd>E</dd></div><div><dt>自动寻路</dt><dd>点选地面或地点</dd></div></dl>`;
+      <dl class="control-list"><div><dt>打开或关闭菜单</dt><dd>M</dd></div><div><dt>返回上一级</dt><dd>Esc</dd></div><div><dt>移动</dt><dd>WASD / 方向键</dd></div><div><dt>按住快跑</dt><dd>Shift</dd></div><div><dt>调查或交谈</dt><dd>E</dd></div><div><dt>自动寻路</dt><dd>点选地面或地点</dd></div></dl>`;
     }
     menu.dataset.page=page;
     const title=page==="site"?T.siteList(s.region)[T.near(s.pos,s.region)].name:entry?.[2]||"冒险菜单";
@@ -174,39 +175,54 @@ function runMistcape() {
     return site||"cover";
   }
   const atFishingBank=()=>s.region==="cove"&&T.near(s.pos,s.region)==="pool";
+  const itineraries={1:["coast","lanternTown","bambooRoad","kiln","ridge"],2:["cove","saltport","saltRoad","echoCave","marsh"]};
+  function chapterMap(){
+    const chapter=T.areas[s.region].chapter;
+    return `<details class="chapter-map"><summary>${chapter===1?"第一章 · 潮光":"第二章 · 镜潮"}行旅图</summary><ol>${itineraries[chapter].map(id=>{
+      const area=T.areas[id];
+      return `<li ${id===s.region?'aria-current="location"':""}><img src="assets/color/${id}.webp" alt=""><span><b>${area.name}</b><small>${area.type}${id===s.region?" · 当前位置":""}</small></span></li>`;
+    }).join("")}</ol><p>${chapter===1?"研究站通灯匠镇。竹影驿道分两岔，一路到古窑，一路上栖风岭。岭上松关栈门通回练习场。":"盐镜渡口通盐栈港。潮田长堤分两岔，一路进石窟，一路到鸣沙泽。芦汀旧埠通回潮汐小屋。"}</p></details>`;
+  }
   function chapterJournal(){
-    return Object.entries(J.chapters).filter(([id])=>J.open(s,id)).map(([id,c])=>{
+    return Object.entries(J.chapters).filter(([id])=>id==="ridge"||J.open(s,id)).map(([id,c])=>{
       const stage=s.chapters[id];
-      return `<article class="chapter-note ${id}"><div class="chapter-print" aria-hidden="true"></div><div><small>${c.badge} · ${c.region}</small><h3>${c.title}</h3><p>${[c.opening,c.clue,c.ending][stage]}</p></div></article>`;
+      return `<article class="chapter-note ${id}"><div class="chapter-print" aria-hidden="true"></div><div><small>${c.badge} · ${c.region}</small><h3>${c.title}</h3><p>${[c.opening,c.clue,c.ending][stage]}</p><p>${s.expedition[id]===3?"已寻回"+J.errands[id].item:J.errands[id].goals[s.expedition[id]]}</p></div></article>`;
     }).join("");
   }
   function nextGoal(){
-    if(!s.camp&&!s.badge)return "到林间练习场找青禾切磋。她在等夜渡船靠岸。";
-    const {ridge,marsh}=J.chapters;
-    if(!s.badge)return ridge.goals[s.chapters.ridge];
-    if(s.region==="ridge"&&s.chapters.ridge<2)return ridge.goals[s.chapters.ridge];
-    if(s.secondBadge){
-      if(s.region==="marsh"&&s.chapters.marsh<2)return marsh.goals[s.chapters.marsh];
-      return "两枚徽章已集齐。可以重访栖风岭和鸣沙泽，循迹补全灵兽谱。";
+    if(!s.badge){
+      if(!s.camp&&!J.hasTool(s,"ridge"))return J.goal(s,"ridge")+" 林间练习场的青禾也在等你。";
+      if(!s.camp)return "回雾岬海岸的林间练习场与青禾切磋，她会打开栖风岭的栈门。";
+      return J.goal(s,"ridge");
     }
-    if(s.region==="ridge")return "从松关栈门下山，再去研究站或灯台搭船。";
-    if(s.region==="coast")return "从研究站或望潮灯台搭船前往盐镜湾。";
-    if(s.chapters.marsh<2)return marsh.goals[s.chapters.marsh];
+    if(s.secondBadge)return "两枚徽章已集齐。可以重走两条驿路，寻找野生伙伴、行旅补给和沿途的训练师。";
+    if(T.areas[s.region].chapter===1)return "回雾岬研究站或望潮灯台，从建筑菜单搭船前往盐镜湾。";
+    if(s.chapters.marsh<2)return J.goal(s,"marsh");
     return G.hasLocal(s)?"返回盐镜观测台，挑战领航员汐弦。":"结缘盐镜湾或鸣沙泽的一种本地灵兽，再回盐镜观测台。";
   }
   function sitePanel(standalone=false){
-  const site=activeSite(),reeds=["cove","marsh"].includes(s.region);
+  const site=activeSite(),reeds=["cove","marsh","saltRoad"].includes(s.region);
   const d=site==="cover"?{name:reeds?"湾畔芦荡":"原野高草",icon:"leaf",action:reeds?"调查潮草":"调查草丛",desc:"草叶间有灵兽活动的痕迹。穿行或调查这里，都有机会相遇。"}:T.siteList(s.region)[site],options=[];
   const chapter=J.chapters[s.region];
   const choices=J.options(s,site);
-  if(chapter&&site===chapter.entrance)options.push(btn(d.action,"cross",s.region,"primary"));
+  const gate=T.passage(s.region,site),errand=J.errands[d?.job];
+  const crossingButton=()=>btn("步行前往"+T.areas[gate.region].name,"walkPassage","","primary");
+  if(d?.exit&&gate)options.push(crossingButton());
+  else if(errand&&s.expedition[d.job]===2&&site===errand.sites[2])errand.choices.forEach(([key,label])=>options.push(btn(label,"errand",key)));
+  else if(errand)options.push(btn(d.action,"errand","inspect","primary"));
+  else if(d?.service==="shop")options.push(btn(d.action,"shop","","primary"));
+  else if(chapter&&site===chapter.entrance)options.push(btn(d.action,"cross",s.region,"primary"));
   else if(choices.length)choices.forEach(([key,label])=>options.push(btn(label,"chapterAction",key)));
   else if(chapter&&[chapter.clueSite,chapter.finishSite].includes(site))options.push(btn(d.action,"chapterAction","inspect","primary"));
-  else if(d)options.push(btn(d.action,site==="dock"?"sail":"interact",site,"primary"));
+  else if(d){
+    const label=s.expedition.trained.includes(site)?"与"+G.trainers[site].name+"叙旧":s.expedition.claimed.includes(site)?"查看补给处":d.action;
+    options.push(btn(label,site==="dock"?"sail":"interact",site,"primary"));
+  }
   for(const [id,c] of Object.entries(J.chapters)){
     if(site===c.gate&&s.region===c.origin)options.push(btn(c.passage,"cross",id,"",!J.open(s,id)));
   }
   if(["lab","hut"].includes(site))options.push(btn("补给商店","shop"));
+  if(gate&&!d.exit)options.push(crossingButton());
   const outbound=site==="lab"||site==="beacon";
   if(outbound)options.push(btn("搭船去盐镜湾","sail","","",!s.badge));
   if(site==="beacon"&&s.badge)options.push(btn("双打交流赛","pairStart"));
@@ -214,7 +230,7 @@ function runMistcape() {
   const title=d?.name||(reeds?"滨海滩地":"海岬原野");
   const assignment=Object.values(J.chapters).find(c=>s.region===c.origin&&site===c.gate);
   const assigned=site==="camp"?"ridge":"marsh";
-  const brief=assignment?[assignment.opening,assignment.clue,assignment.ending][s.chapters[assigned]]:choices.length?chapter.clue:"";
+  const brief=errand?(s.expedition[d.job]===3?"已寻回"+errand.item:errand.goals[s.expedition[d.job]]):assignment?[assignment.opening,assignment.clue,assignment.ending][s.chapters[assigned]]:choices.length?chapter.clue:"";
   const rhythm=site==="gong"&&s.chapters.beats>0?"已敲："+Array(s.chapters.beats).fill("短").join("、")+"。":"";
   const description=d?.desc||(atFishingBank()&&s.rod?"这里靠近水边，可以在岸上抛竿。":"脚下是平地，可以自由行走。成片的高草里栖息着野生灵兽。");
   const heading=standalone?"":`<div class="where">${icon(d?.icon||"compass")}<h2>${title}</h2></div>`;
@@ -224,17 +240,28 @@ function runMistcape() {
   const w=b?.weather||F.ambient(s);
   return `<span class="weather-tag ${w}">${icon(w==="rain"?"drop":"sun")}${F.weatherNames[w]}${b?.weatherTurns?" · "+b.weatherTurns+" 回合":""}</span>`;
 }
+  function figure(person,pos,kind,pet=false){
+    const [x,y]=T.toPct(pos,s.region),label=pet?species[kind].name+"和"+person.name:person.name;
+    return `<button type="button" class="field-figure ${pet?"companion":"villager"}" data-do="visit" data-arg="${person.id}" style="left:${x}%;top:${y}%;z-index:${10+pos.y*2}" aria-label="拜访${label}"><img draggable="false" src="assets/color/${pet?"":"npc-"}${kind}.webp" alt=""></button>`;
+  }
+  function fieldLandmarks(){
+    const figures=T.people(s.region).map(p=>figure(p,p.pos,p.actor)+(p.pet?figure(p,p.petPos,p.pet,true):"")).join("");
+    const signs=Object.entries(T.siteList(s.region)).map(([key,d])=>{
+      const gate=T.passage(s.region,key);
+      if(!gate)return "";
+      return `<button class="field-sign" style="left:${d.at[0]}%;top:${d.at[1]}%" data-do="travel" data-arg="${key}" aria-label="走到${d.name}">${icon("compass")}${T.areas[gate.region].name}</button>`;
+    }).join("");
+    return figures+signs;
+  }
   function fieldSightings(){
-    const id=s.region;
-    if(!J.chapters[id])return "";
-    const done=s.chapters[id]===2;
-    const animals=id==="ridge"?[[done?"raven":"twig",done?78:43,done?22:19],["tuft",29,50]]
-      :[[done?"kui":"fry",done?81:42,done?26:22],["otter",62,65]];
-    return animals.map(([kind,x,y])=>`<img class="field-animal" src="assets/color/${kind}.webp" alt="${species[kind].name}" style="left:${x}%;top:${y}%">`).join("");
+    return T.sightings(s.region,s.chapters[s.region]===2).map(({kind,pos})=>{
+      const [x,y]=T.toPct(pos,s.region);
+      return `<img class="field-animal" src="assets/color/${kind}.webp" alt="${species[kind].name}" style="left:${x}%;top:${y}%;z-index:${10+pos.y*2}">`;
+    }).join("");
   }
   function world(){
-    return `<section class="field-page" aria-label="${regionName()}"><div class="map-viewport"><div class="map ${s.region}" id="map" role="group" aria-label="${regionName()}可探索地图" tabindex="0"><canvas class="field-cover" width="1200" height="800" aria-hidden="true"></canvas><div class="field-sightings">${fieldSightings()}</div><div class="walker-track"><div class="walker" role="img" aria-label="Levi"></div><i class="foot-grass" hidden aria-hidden="true"></i></div></div></div>
-    <div class="field-hud"><div class="touch-pad" aria-label="移动方向">${[["up","↑"],["left","←"],["down","↓"],["right","→"]].map(([k,n])=>`<button data-do="step" data-arg="${k}" aria-label="移动 ${n}">${n}</button>`).join("")}</div><button class="world-action" data-do="inspect" hidden>${icon("compass")} 调查 <kbd>E</kbd></button></div></section>`;
+    return `<section class="field-page" aria-label="${regionName()}"><div class="map-viewport"><div class="map ${s.region}" id="map" role="group" aria-label="${regionName()}可探索地图" tabindex="0"><canvas class="field-cover" width="${T.grid(s.region)[0]*20}" height="${T.grid(s.region)[1]*20}" aria-hidden="true"></canvas><div class="field-sightings">${fieldSightings()}</div><div class="field-landmarks">${fieldLandmarks()}</div><div class="walker-track"><div class="walker" role="img" aria-label="Levi"></div><i class="foot-grass" hidden aria-hidden="true"></i></div></div></div>
+    <div class="field-hud"><div class="touch-pad" aria-label="移动方向">${[["up","↑"],["left","←"],["down","↓"],["right","→"]].map(([k,n])=>`<button data-do="step" data-arg="${k}" aria-label="移动 ${n}">${n}</button>`).join("")}</div><button class="world-action" data-do="inspect" hidden>${icon("compass")} <span class="inspect-label">调查</span> <kbd>E</kbd></button></div></section>`;
   }
   function sizeField(){
     if(!field)return;
@@ -245,20 +272,21 @@ function runMistcape() {
     paintCamera(field.pos||s.pos);
   }
   function paintCamera(pos){
-    const z=follow()?1.5:1;
+    const [w,h]=T.grid(s.region),z=follow()?1.5*w/T.W:1;
     const offset=(p,world,view)=>Math.max(0,Math.min(world*z-view,p*world*z-view/2));
-    const px=offset(pos.x/T.W,field.width,field.vw),py=offset(pos.y/T.H,field.height,field.vh);
+    const px=offset(pos.x/w,field.width,field.vw),py=offset(pos.y/h,field.height,field.vh);
     field.map.style.transform="translate3d("+(-px)+"px,"+(-py)+"px,0) scale("+z+")";
   }
   function drawGrass(canvas,region){
+    const cells=T.grassCells(region);if(!cells.length)return;
     const grass=new Image();
     grass.onload=()=>{
       if(!canvas.isConnected)return;
       const ctx=canvas.getContext("2d");
-      const unit=canvas.width/T.W,cells=T.grassCells(region);
+      const unit=canvas.width/T.grid(region)[0];
       ctx.save();
       ctx.filter="blur(2px)";
-      ctx.fillStyle={ridge:"#69603752",marsh:"#5a635352",cove:"#37745270",coast:"#28654180"}[region];
+      ctx.fillStyle={ridge:"#69603752",marsh:"#5a635352",cove:"#37745270",coast:"#28654180",bambooRoad:"#3c703f70",saltRoad:"#696a3d68"}[region];
       ctx.beginPath();
       for(const {x,y} of cells){
         ctx.moveTo((x+.75)*unit,y*unit);
@@ -279,11 +307,12 @@ function runMistcape() {
         ctx.restore();
       }
     };
-    grass.src="assets/color/"+({coast:"grass",cove:"reeds",ridge:"ridge-grass",marsh:"marsh-reeds"}[region])+".webp";
+    grass.src="assets/color/"+(T.areas[region].grassArt||{coast:"grass",cove:"reeds",ridge:"ridge-grass",marsh:"marsh-reeds"}[region])+".webp";
   }
   function paintPosition(pos,cel){
-    const {track,walker,fringe}=field,[x,y]=T.toPct(pos);
+    const {track,walker,fringe}=field,[x,y]=T.toPct(pos,s.region);
     track.style.transform="translate3d("+x+"%,"+y+"%,0)";
+    track.style.zIndex=10+Math.round(pos.y*2)+1;
     if(walker.dataset.facing!==facing)walker.dataset.facing=facing;
     if(field.cel!==cel){
       walker.style.backgroundPositionX=(cel*12.5)+"%";
@@ -294,13 +323,16 @@ function runMistcape() {
     field.pos=pos;paintCamera(pos);
   }
   function syncMap(){
-    field.interact.hidden=!activeSite()&&!(s.rod&&atFishingBank());
+    const site=activeSite(),d=T.siteList(s.region)[site];
+    const person=T.neighbor(s.pos,s.region);
+    field.interact.hidden=!site&&!person&&!(s.rod&&atFishingBank());
+    field.interact.querySelector(".inspect-label").textContent=person?.line?"交谈 · "+person.name:d?"调查 · "+d.name:"调查";
   }
   function meter(m,cls){
   const data=F.abilities[F.ability(m)];
   return `<div class="meter ${cls}"><div class="meter-head"><strong>${species[m.kind].name}</strong><small>Lv.${m.level}</small></div>${hp(m)}<div class="meter-tags">${elType(m.kind)}<span>${data[0]}</span></div>${cls==="own"?`<div class="xp-mini" aria-label="经验 ${m.xp}"><i style="width:${Math.min(100,m.xp/G.threshold(m.level)*100)}%"></i></div>`:""}</div>`;
 }
-  const battleName=mode=>({wild:regionName()+" · 野生相遇",camp:"巡林员的切磋",beacon:"守灯人的试炼",dome:"领航员的试炼"}[mode]);
+  const battleName=mode=>G.trainers[mode]?.name||({wild:regionName()+" · 野生相遇",camp:"巡林员的切磋",beacon:"守灯人的试炼",dome:"领航员的试炼"}[mode]);
   function duoCommands(m,j){
   const opts=s.party.map((p,i)=>!s.battle.allies.includes(i)&&p.hp>0?`<option value="swap-${i}">换上 ${species[p.kind].name} · Lv.${p.level}</option>`:"").join("");
   return opts+(s.supply.salves&&m.hp<G.stat(m,0)?`<option value="salves">使用草本药膏 ×${s.supply.salves}</option>`:"")+
@@ -312,7 +344,7 @@ function runMistcape() {
     const side=(mon,label)=>`<div class="pair-fighter ${!mon.hp?"fainted":""}">${art(mon.kind,label==="我方"?"rear-art":"")}<div class="duo-meter"><b>${species[mon.kind].name}</b><small> ${label} · Lv.${mon.level}</small>${hp(mon)}</div></div>`;
     function plan(m,j) {
       const usable=G.availableMoves(m),alive=b.rivals.map((v,i)=>({v,i})).filter(p=>p.v.hp>0);
-      const score=(id,target)=>moves[id][2]*C.effectiveness(moves[id][1],target.kind)*moves[id][3]/100;
+      const score=(id,target)=>moves[id][2]*(moves[id][6]==="twice"?2:1)*C.effectiveness(moves[id][1],target.kind)*moves[id][3]/100;
       const ranked=usable.flatMap(id=>alive.map(({v,i})=>({id,i,value:score(id,v)}))).sort((a,d)=>d.value-a.value);
       const best=ranked[0];
       return `<div class="pair-order"><b>${species[m.kind].name}</b><label>回合指令<select id="duo-move-${j}">${usable.map(id=>`<option value="${id}" ${id===best.id?"selected":""}>${moves[id][0]} · ${id==="strain"?"∞":m.skills.find(k=>k.id===id).pp} PP</option>`).join("")}${duoCommands(m,j)}</select></label><label>目标<select id="duo-target-${j}">${alive.map(({v,i})=>`<option value="${i}" ${i===best.i?"selected":""}>${species[v.kind].name}</option>`).join("")}</select></label></div>`;
@@ -339,21 +371,43 @@ function runMistcape() {
     if(!s.starter) return `<section class="wrap page"><div class="panel empty"><h2>等待第一位伙伴</h2><p>研究站的三位伙伴正等着 Levi。</p>${btn("前往选择","tab","adventure","primary")}</div></section>`;
     return `<section class="wrap page"><div class="page-title"><div><p>携带 ${s.party.length} / 6 位伙伴　·　徽章 ${Number(s.badge)+Number(s.secondBadge)} / 2</p></div>${btn(icon("bag")+" 行囊","bag")}</div><div class="party-list">${s.party.map((m,i)=>`<article class="member ${m.kind} ${species[m.kind].type}">${plate(m.kind)}<div class="member-info"><h2>${species[m.kind].name}</h2><p>Lv.${m.level}　${species[m.kind].role}　${i===0?"首发":""}</p>${hp(m)}<div class="hp-txt">EXP ${m.xp} / ${G.threshold(m.level)}</div><div class="tools">${btn("详情","detail",i)}${i>0?btn("设为首发","lead",i,"",!!s.battle||!m.hp):""}</div></div></article>`).join("")}</div>${s.box.length?`<div class="subhead"><h2>研究站寄养</h2></div><div class="panel"><p class="note">在研究站可将寄养伙伴与队员交换。</p>${s.box.map((m,i)=>`<div class="dialog-row"><span>${species[m.kind].name}　Lv.${m.level}</span>${btn("交换队员","boxSelect",i,"",!!s.battle||activeSite()!=="lab")}</div>`).join("")}</div>`:""}</section>`;
   }
+  let dexBook="field",farArea=0;
   function dex(){
     const known=k=>C.starters.includes(k)||s.seen.includes(k)||s.caught.includes(k);
     const card=(line,i)=>{
-      const k=line[i],d=species[k],stage=["初阶","中阶","终阶"][i];
+      const k=line[i],d=species[k],stage=line.length===1?"独立种":i===line.length-1?"终阶":i?"中阶":"初阶";
       const condition=i?"Lv."+C.evolutionLevels[line[i-1]]:"";
       const hint=i?"由"+species[line[i-1]].name+"培养获得。":d.habitat||(k==="snail"?"在潮声浅滩垂钓时寻找。":["crab","moth"].includes(k)?"在盐镜湾的芦荡中寻找。":"在雾岬海岸的高草中寻找。");
       const portrait=known(k)?plate(k):`<div class="plate"><div class="plate-head"><span class="num">谱 ${d.no}</span></div>${icon("compass")}</div>`;
       return `<article class="dex-entry ${k} ${d.type}">${portrait}<div class="member-info"><small>${stage} ${condition}</small><h2>${known(k)?d.name:"尚待发现"}</h2><p>${known(k)?d.desc:hint}</p>${known(k)&&i===0&&!C.starters.includes(k)?`<p class="note">${hint}</p>`:""}<span class="chip">${s.caught.includes(k)?"已结缘":s.seen.includes(k)?"已目击":known(k)?"研究站记录":"未目击"}</span></div></article>`;
     };
-    return `<section class="wrap page"><div class="page-title"><p>已结缘 ${s.caught.length} / ${Object.keys(species).length} 种形态　·　已目击 ${s.seen.length} 种　·　${C.lineages.length} 支谱系</p></div>${C.lineages.map(line=>{
+    const tabs='<div class="folio-tabs">'+btn("沿岸卷","dexBook","field",dexBook==="field"?"primary":"")+btn("远域卷","dexBook","far",dexBook==="far"?"primary":"")+'</div>';
+    if(dexBook==="far"){
+      const area=C.reserve[farArea];
+      return `${tabs}<label class="folio-select">拟定栖地 <select id="far-area">${C.reserve.map((a,i)=>`<option value="${i}" ${i===farArea?"selected":""}>${a.habitat}</option>`).join("")}</select></label>
+      <p class="note">远域卷收录后续地图的考察画稿。当前两章可在沿岸卷查看当地灵兽。</p>${area.families.map(f=>{
+        const line=C.familyOf[f.id];return `<section class="dex-family"><h3>${C.lineage(f.id)}</h3><p class="note">${species[f.id].source} · ${f.motif}</p><div class="dex-grid">${line.map(k=>`<article class="dex-entry ${species[k].type}">${plate(k)}<div class="member-info"><h2>${species[k].name}</h2><small>${species[k].role} · ${line.length===1?"不进化":(line.indexOf(k)+1)+" / "+line.length+" 阶"}</small><p>${species[k].desc}</p>${btn("查看档案与招式","specPath",k)}</div></article>`).join("")}</div></section>`;
+      }).join("")}`;
+    }
+    const local=C.lineages.filter(line=>!species[line[0]].reserve),count=local.flat().length;
+    return `<section class="wrap page">${tabs}<div class="page-title"><p>沿岸已结缘 ${s.caught.filter(k=>species[k]&&!species[k].reserve).length} / ${count} 种形态　·　${local.length} 支谱系</p></div>${local.map(line=>{
       const base=species[line[0]],title=known(line[0])?base.name+"谱系":"灵兽谱 "+base.no;
       return `<section class="dex-family"><h3>${title}</h3><div class="dex-grid">${line.map((_,i)=>card(line,i)).join("")}</div></section>`;
     }).join("")}</section>`;
   }
+  let enteringBattle=false;
   function render(){
+    if(enteringBattle)return;
+    if(!s.battle||document.body.dataset.scene!=="field"){paintScene();return;}
+    enteringBattle=true;presenting=true;clearWalk();save();
+    $("#screen").inert=true;$("#top").inert=true;
+    let painted=false;
+    const reveal=()=>{if(!painted){painted=true;paintScene();}};
+    MistTheater.encounter(s.battle,reveal).catch(()=>toast("已进入战斗。")).finally(()=>{
+      reveal();enteringBattle=false;presenting=false;$("#screen").inert=false;$("#top").inert=false;
+    });
+  }
+  function paintScene(){
     clearWalk();resizeField.disconnect();field=null;
     const scene=!s.starter?"opening":s.battle?"battle":"field";
     document.body.dataset.scene=scene;
@@ -371,11 +425,19 @@ function runMistcape() {
     if(!$("#dialog").open)$("#dialog").showModal();
   }
   function choose(k){selected=k;render();$(".specimen.selected")?.focus({preventScroll:true});beep(380+C.starters.indexOf(k)*70);}
+  function setRunning(held){
+    if(running===held)return;
+    running=held;
+    if(!segment)return;
+    const now=performance.now(),progress=Math.min(1,Math.max(0,(now-segment.start)/segment.duration));
+    segment.duration=held?runMs:walkMs;
+    segment.start=now-progress*segment.duration;
+  }
   function takeStep(dest,start){
     const from=s.pos;
     if(!G.step(s,dest))return false;
     facing=dest.x>from.x?"right":dest.x<from.x?"left":dest.y>from.y?"down":"up";
-    segment={from,to:dest,start};
+    segment={from,to:dest,start,duration:running?runMs:walkMs};
     save();
     return true;
   }
@@ -391,28 +453,37 @@ function runMistcape() {
     if(directions.size)facing=directions.values().next().value;
     if(journey){
       if(journey.index<journey.path.length&&takeStep(journey.path[journey.index++],start))return true;
-      const site=journey.site;
-      if(site&&journey.index===journey.path.length&&T.near(s.pos,s.region)===site){
+      const {site,visitor}=journey;
+      journey=null;
+      if(visitor){meet(visitor);return false;}
+      if(site&&T.near(s.pos,s.region)===site){
         toast("已抵达"+T.siteList(s.region)[site].name);field.map.focus({preventScroll:true});
       }
-      journey=null;
     }
     return false;
   }
   function walkFrame(now){
     frameRequest=0;
     if(!segment||!field)return;
-    if(now>=segment.start+tileMs){
-      const boundary=segment.start+tileMs;
+    if(now>=segment.start+segment.duration){
+      const boundary=segment.start+segment.duration;
       segment=null;gait=(gait+1)%cycleTiles;
       if(s.battle){render();beep(580,true);return;}
+      const site=T.near(s.pos,s.region),d=T.siteList(s.region)[site];
+      if(d?.exit&&(!journey||journey.index===journey.path.length)){
+        const endpoint=T.toGrid(d.at,s.region);
+        if(endpoint.x===s.pos.x&&endpoint.y===s.pos.y){
+          if(crossLand())return;
+          clearWalk();paintPosition(s.pos,0);syncMap();return;
+        }
+      }
       syncMap();
       // Carry the sub-frame remainder across tiles, without replaying long background stalls.
       if(!nextStep(Math.max(boundary,now-32))){
         paintPosition(s.pos,0);return;
       }
     }
-    const {from,to,start}=segment,t=Math.max(0,Math.min(1,(now-start)/tileMs));
+    const {from,to,start}=segment,t=Math.max(0,Math.min(1,(now-start)/segment.duration));
     let cel=1+Math.floor((gait+t)*8/cycleTiles)%8;
     const stopping=!heldDirections.size&&!queuedDirection&&(!journey||journey.index===journey.path.length);
     if(stopping&&t>.78)cel=cel<=4?1:5;
@@ -431,39 +502,69 @@ function runMistcape() {
     const target=site?dest:T.nearestGround(dest,s.region,1,s.pos);
     const path=T.route(s.pos,target,s.region);
     if(!path){toast("这里无法落脚，请选择附近的陆地。");return;}
+    if(!path.length&&site&&T.siteList(s.region)[site].exit){crossLand();return;}
     journey={path,index:0,site};
+    startWalking();
+  }
+  function crossLand(){
+    if(!J.walkPassage(s)){if(s.notice)toast(s.notice);return false;}
+    closeMenu();save();render();beep(480,true);toast(s.notice);return true;
+  }
+  function meet(id){
+    const person=T.neighbor(s.pos,s.region);
+    if(!person||person.id!==id||!fieldOpen())return;
+    const foot=[person.pos,person.petPos].find(p=>p&&Math.abs(p.x-s.pos.x)+Math.abs(p.y-s.pos.y)===1);
+    if(foot)facing=foot.x>s.pos.x?"right":foot.x<s.pos.x?"left":foot.y>s.pos.y?"down":"up";
+    if(person.site){openMenu("site");return;}
+    modal(person.name,`<section class="road-chat"><div class="chat-pair"><img src="assets/color/npc-${person.actor}.webp" alt=""><img src="assets/color/${person.pet}.webp" alt="${species[person.pet].name}"></div><div><small>随行 · ${species[person.pet].name}</small><p>「${person.line}」</p></div></section>`);
+    $("#dialog [data-do=close]").focus({preventScroll:true});
+  }
+  function visit(id){
+    if(!fieldOpen())return;
+    const path=T.approach(s.pos,id,s.region);
+    if(!path){toast("从另一边靠近这里试试。");return;}
+    heldDirections.clear();queuedDirection=null;
+    journey={path,index:0,visitor:id};
     startWalking();
   }
   function inspect(){
     if(!fieldOpen())return;
+    const person=T.neighbor(s.pos,s.region);
+    if(person){meet(person.id);return;}
     const site=activeSite();
     if((site&&Object.hasOwn(T.siteList(s.region),site)&&!["grass","pool"].includes(site))||(s.rod&&atFishingBank())){
       openMenu("site");return;
     }
     interact(site);
   }
+  function service(kind){return ["lab","hut"].includes(activeSite())||T.siteList(s.region)[activeSite()]?.service===kind;}
   function interact(k){
   stopWalk();if(!k||k!==activeSite()){toast("请先靠近可调查的地点。");return;}
-  if(k==="lab"||k==="hut"){
+  const d=T.siteList(s.region)[k];
+  if(service("inn")){
     G.restore(s);s.notice="伙伴体力和招式次数已恢复，基础补给已备齐。";
     if(k==="hut"&&!s.rod){s.rod=true;s.notice="守潮人把潮线竿交给了 Levi。前往潮声浅滩，抛竿等待浮标下沉。";}
     beep(500,true);
   }else if(k==="beacon"&&!G.canBeacon(s)){s.notice=nextGoal();}
   else if(k==="dome"&&!G.canDuel(s)){s.notice=nextGoal();}
+  else if(d?.gift)J.collect(s);
+  else if(G.trainers[k]&&s.expedition.trained.includes(k))s.notice=G.trainers[k].name+"认出了你，笑着让开路：「下回靠岸，来讲讲旅途的事吧。」";
+  else if(d&&!["camp","beacon","dome","inlet","nest","grass","pool"].includes(k)&&!G.trainers[k])s.notice=d.desc;
   else {G.encounter(s,["grass","pool","cover"].includes(k)?"wild":k);beep(570,true);}
   save();
   if(!s.battle&&menu.open&&menuPage==="site"){
-    menu.querySelector(".site-feedback").textContent=s.notice;return;
+    drawMenu("site");menu.querySelector(".site-feedback").textContent=s.notice;return;
   }
   closeMenu();render();if(!s.battle)toast(s.notice);
 }
   const itemIcon=id=>`<img class="item-art" src="assets/color/item-${id}.webp" alt="">`;
   function bagContents(){
   const list=Object.entries(F.stock).map(([id,it])=>`<div class="dialog-row stocked">${itemIcon(id)}<div><b>${it.name} ×${s.supply[id]}</b><p class="note">${it.desc}</p></div>${["salves","tonic"].includes(id)&&!s.battle?btn("使用","useSelect",id,"",!s.supply[id]):""}</div>`).join("");
-  return `<div class="bag-ledger"><b>潮币 ${s.coins}</b><span>${s.badge?"潮光徽章":"徽章 0 / 2"}${s.secondBadge?" · 镜潮徽章":""}${s.rod?" · 潮线竿":""}</span></div>${list}<div class="dialog-foot tools">${btn("重新开始冒险","resetPrompt")}</div>`;
+  const questItems=Object.entries(J.errands).filter(([id])=>s.expedition[id]===3).map(([,entry])=>entry.item);
+  return `<div class="bag-ledger"><b>潮币 ${s.coins}</b><span>${s.badge?"潮光徽章":"徽章 0 / 2"}${s.secondBadge?" · 镜潮徽章":""}${s.rod?" · 潮线竿":""}${s.badge?" · 潮光招式卷":""}${s.secondBadge?" · 镜潮招式卷":""}</span></div>${questItems.length?`<p class="note">调查物品 · ${questItems.join("、")}</p>`:""}${list}<div class="dialog-foot tools">${btn("重新开始冒险","resetPrompt")}</div>`;
 }
   function shop(){
-  if(s.battle||!["lab","hut"].includes(activeSite()))return;
+  if(s.battle||!service("shop"))return;
   modal("沿岸补给所",`<div class="bag-ledger"><span>余额</span><b>${s.coins} 潮币</b></div>${Object.entries(F.stock).map(([id,it])=>`<div class="dialog-row stocked">${itemIcon(id)}<div><b>${it.name}</b><p class="note">${it.desc}</p><small>行囊 ×${s.supply[id]}</small></div>${btn(it.price+" 潮币","buy",id,"",s.coins<it.price)}</div>`).join("")}`);
 }
   function inventoryTarget(id){
@@ -472,26 +573,52 @@ function runMistcape() {
   function equipment(i){
   const m=s.party[i];modal("更换携带物",`<p class="note">${species[m.kind].name}当前携带${F.stock[m.held]?.name||"空"}。</p>${Object.entries(F.stock).filter(([,it])=>it.hold).map(([id,it])=>`<div class="dialog-row stocked">${itemIcon(id)}<div><b>${it.name} ×${s.supply[id]}</b><p class="note">${it.desc}</p></div>${btn("携带","equip",i+","+id,"",m.held===id||!s.supply[id])}</div>`).join("")}<div class="dialog-foot">${btn("卸下携带物","equip",i+",","",!m.held)}</div>`);
 }
+  function movePage(m,index){
+    const desk=index!==null&&!s.battle&&service("inn"), plan=F.studyPlan(m,index===null?null:s);
+    const groups=["升级","进化","师授","秘卷","同伴","回忆"];
+    return groups.map(group=>{
+      const entries=plan.filter(e=>e.source===group);if(!entries.length)return "";
+      return `<section class="study-group"><h3>${group}</h3>${entries.map(e=>{
+        const equipped=m.skills.some(sk=>sk.id===e.id);
+        return `<div class="dialog-row"><div><small>${e.hint}</small><b>${moves[e.id][0]}</b><p class="note">${moveInfo(e.id)}</p></div>${desk?btn(equipped?"已装备":e.ready?"学习":"未解锁","chooseSlot",index+","+e.id,"",equipped||!e.ready):""}</div>`;
+      }).join("")}</section>`;
+    }).join("");
+  }
+  function farDossier(kind){
+    const d=species[kind],m={kind,level:1,skills:[]},[ability,trait]=F.abilities[F.ability(m)];
+    const views=[[art(kind,"",d.name+"正面"),"正面"],[art(kind,"rear-art",d.name+"背面"),"背面"]];
+    modal(d.name+" · 灵兽档案",`<div class="folio-views">${views.map(([img,n])=>`<figure>${img}<figcaption>${n}</figcaption></figure>`).join("")}</div>
+      <p>${d.desc}</p><p class="note">${d.source} · ${d.motif}　${d.habitat}</p>
+      <p><b>${d.role}</b>　${elType(kind)}</p><p class="note">${C.lineage(kind)}</p>
+      <dl class="folio-stats">${F.labels.map((n,i)=>`<div><dt>${n}</dt><dd>${d.stats[i]}</dd></div>`).join("")}</dl>
+      <p><b>${ability}</b> · ${trait}</p>${movePage(m,null)}`);
+  }
   function dojo(i){
-  const m=s.party[i];modal("整备招式",`<p class="note">${species[m.kind].name}最多携带四招。已学招式可在补给点免费回忆。</p>${F.teachable(m).map(id=>{const a=moves[id],known=m.skills.some(k=>k.id===id);return `<div class="dialog-row"><div><b>${a[0]}</b><p class="note">${moveInfo(id)}</p></div>${btn(known?"已装备":"学习","chooseSlot",i+","+id,"",known)}</div>`;}).join("")}`);
-}
+    const m=s.party[i];modal(species[m.kind].name+" · 招式谱",movePage(m,i));
+  }
+  function offerNext(index){
+    if(s.battle||presenting)return;
+    const i=Number.isInteger(index)&&s.party[index]?.offers?.length?index:s.party.findIndex(m=>m.offers?.length);if(i<0)return;
+    const m=s.party[i],id=m.offers[0];
+    modal("领悟新招",`<p><b>${species[m.kind].name}</b> 可以学习「${moves[id][0]}」。</p><p class="note">${moveInfo(id)}</p>${m.skills.map((sk,slot)=>`<div class="dialog-row"><b>${moves[sk.id][0]}</b>${btn("替换","offer",[i,slot].join(","))}</div>`).join("")}<div class="dialog-foot">${btn("保留原招 · 稍后回忆","offer",i+",-1")}</div>`);
+  }
   function moveInfo(id){
-  const [n,t,p,acc,pp,,effect]=moves[id];
-  const effects={protect:"先制防护，连续使用成功率递减",spread:"双打命中两位对手，双目标时每位承受 75% 伤害",rain:"五回合降雨，增强水、削弱火",sun:"五回合烈日，增强火、削弱水",sleep:"使目标睡眠 1～3 次行动",focus:"提高一级特攻",guard:"提高一级防御",weaken:"降低目标一级攻击",poison:"有机会使对手中毒",burn:"有机会灼伤",para:"有机会麻痹",quick:"先制出手",drain:"回复造成伤害的一半",slow:"有机会降低速度"};
-  return [types[t][0],p?(["plain","rock","air"].includes(t)?"物理":"特殊")+" "+p:"变化","命中 "+acc+"%","PP "+pp,effects[effect]].filter(Boolean).join(" · ");
+  const [n,t,p,acc,pp,category,effect]=moves[id];
+  const effects={heal:"恢复最大体力的一半",cleanse:"解除自身异常",haste:"提高一级速度",ward:"提高一级特防",keen:"要害概率提高至 25%",punish:"对异常目标威力提高一半",comeback:"半血以下威力提高一半",rainbound:"降雨时威力提高一半",sunbound:"烈日时威力提高一半",twice:"连续攻击两次，各自判定命中",breach:"忽略目标防守能力等级",recoil:"承受最大体力六分之一的反冲",protect:"先制防护，连续使用成功率递减",spread:"双打命中两位对手，双目标时每位承受 75% 伤害",rain:"五回合降雨，增强水、削弱火",sun:"五回合烈日，增强火、削弱水",sleep:"使目标睡眠 1～3 次行动",focus:"提高一级特攻",guard:"提高一级防御",weaken:"降低目标一级攻击",poison:"有机会使对手中毒",burn:"有机会灼伤",para:"有机会麻痹",quick:"先制出手",drain:"回复造成伤害的一半",slow:"有机会降低速度"};
+  return [types[t][0],p?(category==="physical"?"物理":"特殊")+" "+p:"变化","命中 "+acc+"%","PP "+pp,effects[effect]].filter(Boolean).join(" · ");
 }
   function detail(i){
   const m=s.party[i],d=species[m.kind],[ability,explain]=F.abilities[F.ability(m)];
   const line=C.familyOf[m.kind],stage=line.indexOf(m.kind);
   const replayButtons=line.slice(0,stage).map((from,step)=>btn(stage===1?"重看进化":"重看第"+(step===0?"一":"二")+"次进化","replayEvolution",i+","+from)).join("");
   const canEvolve=C.evolutions[m.kind]&&m.level>=C.evolutionLevels[m.kind]&&!s.battle;
-  const manage=!s.battle,atDesk=["lab","hut"].includes(activeSite());
+  const manage=!s.battle,atDesk=service("inn");
   modal(d.name,`<div class="dossier"><div class="portrait">${art(m.kind)}</div><div>${elType(m.kind)}<h3>Lv.${m.level}　${d.role}</h3>${hp(m)}<small>EXP ${m.xp} / ${G.threshold(m.level)}</small></div></div>
   <div class="skill-notes"><p><b>性格</b> ${F.disposition(m)}</p><p><b>特性</b> ${ability} · ${explain}</p><p><b>携带</b> ${F.stock[m.held]?.name||"空"}</p></div>
   <table class="stat-table"><thead><tr><th>能力</th><th>数值</th><th>个体值</th><th>努力值</th></tr></thead><tbody>${F.labels.map((n,j)=>`<tr><th>${n}</th><td>${G.stat(m,j)}</td><td>${m.iv[j]}</td><td>${m.ev[j]}</td></tr>`).join("")}</tbody></table>
-  <p class="note">累计努力值 ${m.ev.reduce((a,b)=>a+b,0)} / 510</p><p class="note">第 ${stage+1} / 3 阶段　·　${C.lineage(m.kind)}</p>
+  <p class="note">累计努力值 ${m.ev.reduce((a,b)=>a+b,0)} / 510</p><p class="note">第 ${stage+1} / ${line.length} 阶段　·　${C.lineage(m.kind)}</p>
   ${m.skills.map(sk=>`<div class="dialog-row"><div><b>${moves[sk.id][0]}</b><p class="note">${moveInfo(sk.id)}</p></div><small>PP ${sk.pp}</small></div>`).join("")}
-  <div class="dialog-foot tools">${btn("更换携带物","equipment",i,"",!manage)}${btn("整备招式","dojo",i,"",!manage||!atDesk)}${canEvolve?btn("现在进化","evolvePartner",i,"primary"):""}${replayButtons}${btn("返回","close")}</div>${!atDesk?"<p class='note dialog-foot'>在雾岬研究站或潮汐小屋可以整备招式。</p>":""}`);
+  <div class="dialog-foot tools">${btn("更换携带物","equipment",i,"",!manage)}${btn("查看招式谱","dojo",i)}${m.offers?.length&&manage?btn("领悟新招","pendingSkills",i):""}${canEvolve?btn("现在进化","evolvePartner",i,"primary"):""}${replayButtons}${btn("返回","close")}</div>${!atDesk?"<p class='note dialog-foot'>在研究站、潮汐小屋或城镇客栈可以整备招式。</p>":""}`);
 }
   function cast(){
   if(s.battle||!s.rod||!atFishingBank())return;
@@ -554,7 +681,8 @@ function runMistcape() {
       case "menuClose":closeMenu();break;
       case "tab":if(arg==="adventure")closeMenu();else openMenu(arg);break;
       case "sound":s.sound=!s.sound;save();syncMusic();beep(660);drawMenu();menu.querySelector("[data-do=sound]")?.focus();break;
-      case "travel":if(s.battle)break;closeMenu();go(T.toGrid(T.siteList(s.region)[arg].at),arg);break;
+      case "visit":visit(arg);break;
+      case "travel":if(s.battle)break;closeMenu();go(T.toGrid(T.siteList(s.region)[arg].at,s.region),arg);break;
       case "step":pressDirection("tap",arg);releaseDirection("tap");break;
       case "inspect":inspect();break;
       case "interact":interact(arg);break;
@@ -566,20 +694,29 @@ function runMistcape() {
       case "camera":s.follow=!follow();save();if(field)paintCamera(s.pos);drawMenu();menu.querySelector("[data-do=camera]")?.focus();break;
       case "bag":openMenu("bag");break;
       case "shop":shop();break;
-      case "buy":if(["lab","hut"].includes(activeSite())&&F.buy(s,arg)){save();render();shop();beep(545);toast("已购入"+F.stock[arg].name);}break;
+      case "buy":if(service("shop")&&F.buy(s,arg)){save();render();shop();beep(545);toast("已购入"+F.stock[arg].name);}break;
       case "equipment":if(!s.battle)equipment(Number(arg));break;
       case "equip":{const [i,id]=arg.split(",");if(F.equip(s,Number(i),id)){save();render();detail(Number(i));}break;}
       case "useSelect":if(!s.battle)inventoryTarget(arg);break;
       case "fieldUse":{const [id,i]=arg.split(",");if(!s.battle&&F.use(s,id,Number(i))){save();closeDialog();render();openMenu("bag");toast("已使用"+F.stock[id].name);}break;}
-      case "dojo":if(!s.battle&&["lab","hut"].includes(activeSite()))dojo(Number(arg));break;
+      case "dojo":dojo(Number(arg));break;
+      case "pendingSkills":offerNext(Number(arg));break;
+      case "offer":{const [i,slot]=arg.split(",").map(Number);if(G.resolveOffer(s,i,slot)){save();closeDialog();offerNext();}break;}
+      case "specPath":if(species[arg]?.reserve)farDossier(arg);break;
+      case "dexBook":dexBook=arg==="far"?"far":"field";drawMenu("dex");break;
       case "chooseSlot":{
         const [i,id]=arg.split(","),m=s.party[i];
-        if(!s.battle&&["lab","hut"].includes(activeSite())){
+        if(!s.battle&&service("inn")){
           if(m.skills.length<4){if(F.teach(s,Number(i),id,m.skills.length)){save();render();detail(Number(i));}}
           else modal("选择替换的招式","<p class='note'>新招式「"+moves[id][0]+"」将占用一个招式栏位。</p>"+m.skills.map((sk,j)=>'<div class="dialog-row"><b>'+moves[sk.id][0]+'</b>'+btn("替换","learn",[i,id,j].join(","))+'</div>').join(""));
         }break;
       }
-      case "learn":{const [i,id,j]=arg.split(",");if(["lab","hut"].includes(activeSite())&&F.teach(s,Number(i),id,Number(j))){save();render();detail(Number(i));}break;}
+      case "learn":{const [i,id,j]=arg.split(",");if(service("inn")&&F.teach(s,Number(i),id,Number(j))){save();render();detail(Number(i));}break;}
+      case "walkPassage":crossLand();break;
+      case "errand":
+        if(J.doErrand(s,arg)){
+          save();openMenu("site");menu.querySelector(".site-feedback").textContent=s.notice;beep(520);
+        }break;
       case "cross":if(J.crossing(s,arg)){closeMenu();save();render();beep(480,true);toast(s.notice);}break;
       case "chapterAction":
         if(J.investigate(s,arg)){
@@ -593,7 +730,7 @@ function runMistcape() {
       case "detail":detail(Number(arg));break;
       case "evolvePartner":{
         const i=Number(arg);
-        if(G.evolvePartner(s,i)){save();closeDialog();render();showEvolutions().then(()=>detail(i));}
+        if(G.evolvePartner(s,i)){save();closeDialog();render();showEvolutions().then(()=>s.party[i].offers?.length?offerNext():detail(i));}
         break;
       }
       case "replayEvolution":{
@@ -622,7 +759,7 @@ function runMistcape() {
         break;
       }
       case "history":modal("战斗记录",`<ul class="battle-log">${s.battle.history.map(l=>`<li>${journalHTML(l)}</li>`).join("")}</ul>`);break;
-      case "leave":if(G.leaveBattle(s)){save();render();}break;
+      case "leave":if(G.leaveBattle(s)){save();render();offerNext();}break;
       case "boxSelect":boxIndex=Number(arg);teamDialog("swap");break;
       case "swap":if(activeSite()==="lab"&&!s.battle&&s.box[boxIndex]&&s.party[arg]){[s.box[boxIndex],s.party[arg]]=[s.party[arg],s.box[boxIndex]];G.restore(s);save();closeDialog();render();}break;
       case "resetPrompt":modal("重新开始冒险？",`<p>将清除当前队伍、图鉴和徽章，回到研究站重新选择初始伙伴。</p><div class="tools dialog-foot">${btn("保留进度","close","","primary")}${btn("清除并重开","reset")}</div>`);break;
@@ -646,7 +783,7 @@ function runMistcape() {
       if(button.dataset.do!=="step"||e.detail===0)action(button.dataset.do,button.dataset.arg);
       return;
     }
-    const map=e.target.closest("#map");if(map){const r=map.getBoundingClientRect();go(T.toGrid([(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100]));}
+    const map=e.target.closest("#map");if(map){const r=map.getBoundingClientRect();go(T.toGrid([(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100],s.region));}
     if(e.target===$("#dialog")){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();}
   });
   document.addEventListener("fullscreenchange",()=>{
@@ -664,14 +801,19 @@ function runMistcape() {
     if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeMenu();
   });
   document.addEventListener("change",e=>{
+    if(e.target.id==="far-area"){farArea=Number(e.target.value);drawMenu("dex");return;}
     if(!e.target.id?.startsWith("duo-move-"))return;
     const j=e.target.id.slice(9),target=$("#duo-target-"+j),value=e.target.value;
     if(!target)return;
-    const fixedTarget=value.startsWith("swap-")||["salves","tonic"].includes(value)||["spread","rain","sun","protect","guard","focus"].includes(moves[value]?.[6]);
+    const fixedTarget=value.startsWith("swap-")||["salves","tonic"].includes(value)||["spread","rain","sun","protect","guard","focus","heal","cleanse","haste","ward"].includes(moves[value]?.[6]);
     target.disabled=fixedTarget;
     target.setAttribute("title",fixedTarget?"此指令自动确定作用对象":"选择对手");
   });
   document.addEventListener("keydown",e=>{
+    setRunning(e.shiftKey);
+    if($("#dialog").open&&$("#dialog .road-chat")&&["e","E","Enter"," "].includes(e.key)){
+      e.preventDefault();if(!e.repeat)closeDialog();return;
+    }
     if(presenting||e.altKey||e.ctrlKey||e.metaKey||$("#dialog").open)return;
     const k=e.key.toLowerCase();
     if(k==="m"||(!menu.open&&k==="escape")){
@@ -692,10 +834,11 @@ function runMistcape() {
       else if(k==="e"&&!e.repeat){e.preventDefault();inspect();}
     }
   });
-  document.addEventListener("keyup",e=>releaseDirection(e.key.toLowerCase()));
-  window.addEventListener("blur",stopWalk);
-  document.addEventListener("visibilitychange",()=>{if(document.hidden)stopWalk();syncMusic();});
+  document.addEventListener("keyup",e=>{setRunning(e.shiftKey);releaseDirection(e.key.toLowerCase());});
+  function releaseControls(){setRunning(false);stopWalk();}
+  window.addEventListener("blur",releaseControls);
+  document.addEventListener("visibilitychange",()=>{if(document.hidden)releaseControls();syncMusic();});
   if(loaded)save();render();if(saveError)toast("本地存档暂不可读，当前会话仍可游玩。");
-  showEvolutions();
+  showEvolutions().then(offerNext);
 }
 runMistcape();

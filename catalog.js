@@ -117,6 +117,10 @@ const MistCatalog = (() => {
     focus:["凝神","plain",0,100,12,"status","focus"],needle:["盐晶刺","rock",56,100,15,"physical","poison"],
     veil:["回岬护幕","plain",0,100,8,"status","protect"],swell:["叠浪","water",60,100,10,"special","spread"]
   });
+  const school=typeof MistSchool!=="undefined"?MistSchool:require("./move-school.js");
+  const reserve=typeof MistFarForms!=="undefined"?MistFarForms:require("./reserve.js");
+  Object.assign(moves,school.moves);
+  reserve.register(species,lineages,familyOf,evolutions,evolutionLevels,school.tracks);
   // Earlier saves store journal entries as sentences, while the party uses stable species keys.
   const oldTerms={
     "苔角羊":species.moss.name,
@@ -144,6 +148,6 @@ const MistCatalog = (() => {
     if(weak[attack]?.includes(defend)) return .5;
     return 1;
   }
-  return {types,species,moves,journalText,matchup,affinity,effectiveness,evolutions,evolutionLevels,familyOf,lineages,lineage,starters:["moss","ember","tide"]};
+  return {types,species,moves,tracks:school.tracks,familyArts:school.familyArts,reserve:reserve.areas,journalText,matchup,affinity,effectiveness,evolutions,evolutionLevels,familyOf,lineages,lineage,starters:["moss","ember","tide"]};
 })();
 if(typeof module !== "undefined") module.exports = MistCatalog;

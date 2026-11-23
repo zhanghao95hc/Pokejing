@@ -22,6 +22,55 @@ const MistChapters=(()=>{
       reward:"守潮人为你包好两颗露心果，留作下一程的口粮。"
     }
   };
+  const errands={
+    ridge:{
+      sites:["lampMaker","postShelter","glassTable"],item:"透雾灯片",
+      goals:["从雾岬研究站进灯匠镇，找灯纸作坊的桑婆。","从镇北竹门巷走上竹影驿道，读送灯驿亭的色签。","从驿道的古窑山门进丹砂古窑，在退火拣片台挑选灯片。"],
+      lines:["桑婆递给你一个空灯匣：「从前每次送灯，都要在驿亭记下料色。你去看看，那一页还在不在。」","旧签上写着：浓雾里，烟紫片的光散在脚边，蜜黄片能照到第三根船桩。你把签上的色样拓了下来。","蜜黄色的灯片滑进灯匣，严丝合缝。带它去栖风岭的石龛引灯。"],
+      choices:[["amber","装入蜜黄灯片"],["purple","装入烟紫灯片"]],answer:"amber",miss:"烟紫的光只落到脚边。比一比旧签上的船桩记号，再挑一片。"
+    },
+    marsh:{
+      sites:["shipGuild","tidePost","bellNiche"],item:"青铜钟舌",
+      goals:["从盐镜渡口进盐栈港，找盐运船行的船老大。","从港东盐车道口上潮田长堤，到验潮工棚翻看巡堤簿。","从长堤的潮洞石门进洄声石窟，在沉舟石龛打捞钟舌。"],
+      lines:["船老大把打捞索交给你：「钟舌滚进了潮洞。巡堤人听见过它，工棚里留着当天的记录。」","巡堤簿写着：空石腔回声尖，压着铜器的石腔回声低。你在绳头系了个方便套住铜环的结。","绳索一紧，沉在石龛里的青铜钟舌露出水面。带它去鸣沙泽的回澜钟架。"],
+      choices:[["high","放索到高鸣处"],["low","放索到低鸣处"]],answer:"low",miss:"绳头碰到光滑的空石壁。收回绳索，听一听另一处的回声。"
+    }
+  };
+  function expedition(){return {ridge:0,marsh:0,claimed:[],trained:[],legacy:[]};}
+  function validExpedition(e){
+    return e&&Object.keys(errands).every(id=>Number.isInteger(e[id])&&e[id]>=0&&e[id]<=3)
+      &&[["claimed",["herbSlope","kilnCache","saltBasket","caveCache"]],["trained",["courier","warden"]],["legacy",Object.keys(errands)]].every(([key,allowed])=>Array.isArray(e[key])&&e[key].every(id=>allowed.includes(id)));
+  }
+  function hasTool(s,id){return s.expedition[id]===3||s.expedition.legacy.includes(id);}
+  function goal(s,id){return hasTool(s,id)?chapters[id].goals[s.chapters[id]]:errands[id].goals[s.expedition[id]];}
+  function doErrand(s,action){
+    if(!s.starter||s.battle)return false;
+    const site=T.near(s.pos,s.region),id=T.siteList(s.region)[site]?.job;
+    if(!id)return false;
+    const e=errands[id],stage=s.expedition[id],station=e.sites.indexOf(site);
+    if(station!==stage){s.notice=station<stage?e.lines[station]:e.goals[stage];return action==="inspect";}
+    if(stage===2){
+      if(!e.choices.some(([key])=>key===action))return false;
+      if(action!==e.answer){s.notice=e.miss;return true;}
+    }else if(action!=="inspect")return false;
+    s.notice=e.lines[stage];s.expedition[id]++;return true;
+  }
+  function collect(s){
+    const site=T.near(s.pos,s.region),item=T.siteList(s.region)[site]?.gift;
+    if(!s.starter||s.battle||!item)return false;
+    if(s.expedition.claimed.includes(site)){s.notice="这一份行旅补给已经收进了行囊。";return true;}
+    const count=item==="tonic"?1:2;
+    s.expedition.claimed.push(site);s.supply[item]+=count;
+    s.notice="收进行囊："+({salves:"药膏",bells:"结缘铃",tonic:"清醒露",berry:"露心果"}[item])+" ×"+count+"。";return true;
+  }
+  function walkPassage(s){
+    if(!s.starter||s.battle)return false;
+    const gate=T.passage(s.region,T.near(s.pos,s.region));if(!gate)return false;
+    if(gate.region==="ridge"&&!open(s,"ridge")){s.notice="青禾还守着岭口。先回雾岬海岸的林间练习场，与她切磋。";return false;}
+    if(T.areas[gate.region].chapter===2&&!s.badge)return false;
+    s.region=gate.region;s.pos=T.toGrid(T.siteList(s.region)[gate.site].at,s.region);
+    s.grace=5;s.notice="抵达"+T.areas[s.region].name+" · "+T.siteList(s.region)[gate.site].name;return true;
+  }
   function fresh(){return {ridge:0,marsh:0,beats:0};}
   function valid(p){
     return !!p&&["ridge","marsh","beats"].every(k=>Number.isInteger(p[k])&&p[k]>=0&&p[k]<=2)
@@ -42,7 +91,7 @@ const MistChapters=(()=>{
   }
   function options(s,site){
     const c=chapters[s.region];
-    if(!c||site!==c.finishSite||s.chapters[s.region]!==1)return [];
+    if(!c||site!==c.finishSite||(s.chapters[s.region]!==1||!hasTool(s,s.region)))return [];
     return s.region==="ridge"?[["north","推开西北窗"],["south","推开东南窗"]]:[["short","敲一声短钟"],["long","敲一声长钟"]];
   }
   function investigate(s,action){
@@ -52,7 +101,7 @@ const MistChapters=(()=>{
     if(site!==c.finishSite&&site!==c.clueSite)return false;
     if(action==="inspect"){
       if(site===c.clueSite){p[id]=Math.max(p[id],1);s.notice=c.clue;}
-      else s.notice=p[id]===2?c.ending:p[id]===0?c.goals[0]:c.clue;
+      else s.notice=p[id]===2?c.ending:!hasTool(s,id)?"此处缺少"+errands[id].item+"。"+goal(s,id):p[id]===0?c.goals[0]:c.clue;
       return true;
     }
     if(!options(s,site).some(([key])=>key===action))return false;
@@ -69,6 +118,6 @@ const MistChapters=(()=>{
     p[id]=2;s.supply[id==="ridge"?"bells":"berry"]+=2;s.notice=c.ending+c.reward;
     return true;
   }
-  return {chapters,fresh,valid,open,crossing,options,investigate};
+  return {chapters,errands,expedition,validExpedition,hasTool,goal,doErrand,collect,walkPassage,fresh,valid,open,crossing,options,investigate};
 })();
 if(typeof module!=="undefined")module.exports=MistChapters;

@@ -1,0 +1,92 @@
+"use strict";
+
+const MistSchool=(()=>{
+  // Each technique references a painted effect strip in its last column.
+  const moves={
+    reedlash:["竹鞭","leaf",59,100,18,"physical","","sprout"],
+    budshelter:["归根息","leaf",0,100,8,"status","heal","sap"],
+    thornpoint:["荆尖挑","leaf",67,100,12,"physical","keen","needle"],
+    dewpress:["露脉点穴","leaf",63,100,12,"special","punish","sap"],
+    leafduet:["双叶斩","leaf",35,95,12,"physical","twice","sprout"],
+    seedtide:["种潮","leaf",77,95,10,"special","spread","sprout"],
+    springburst:["春雷开芽","leaf",99,90,5,"special","drain","sap"],
+    kilnkick:["踏炉","fire",60,100,18,"physical","burn","cinder"],
+    emberdance:["走炭步","fire",0,100,10,"status","haste","flare"],
+    ignition:["丹星穿云","fire",72,95,12,"special","keen","cinder"],
+    sunforge:["晴窑","fire",66,100,10,"physical","sunbound","flare"],
+    twinspark:["双焰掌","fire",35,95,12,"physical","twice","cinder"],
+    ashwave:["燎原帷","fire",80,95,10,"special","spread","flare"],
+    heartfurnace:["赤心炉","fire",110,90,5,"physical","recoil","flare"],
+    tideclaw:["浪钩","water",62,100,18,"physical","","brine"],
+    springbath:["洗尘泉","water",0,100,10,"status","cleanse","ripple"],
+    pearljet:["穿珠流","water",69,100,12,"special","keen","ripple"],
+    rainwake:["雨脚","water",65,100,12,"physical","rainbound","foam"],
+    twinrill:["双涧击","water",36,95,12,"special","twice","ripple"],
+    undertow:["牵舟暗流","water",77,95,10,"special","slow","swell"],
+    seagate:["开海门","water",105,92,5,"physical","breach","swell"],
+    jadehum:["玉磬音","rock",60,100,18,"special","","chip"],
+    stonewrap:["石衣","rock",0,100,10,"status","ward","shelter"],
+    slateedge:["砚锋","rock",72,95,12,"physical","keen","ridge"],
+    faultbell:["裂隙鸣","rock",64,100,12,"special","punish","ridge"],
+    twintile:["双瓦落","rock",37,92,12,"physical","twice","chip"],
+    quarryfall:["崩砂阵","rock",78,94,10,"physical","spread","ridge"],
+    peakpress:["压岳","rock",106,90,5,"physical","breach","ridge"],
+    reedwhistle:["入云哨","air",60,100,18,"special","","gust"],
+    tailstep:["顺翎步","air",0,100,12,"status","haste","gust"],
+    quillcut:["翎尖挑","air",70,100,12,"physical","keen","gale"],
+    headwind:["回风破","air",65,100,12,"special","comeback","gale"],
+    wingbeat:["双翮拍","air",35,97,12,"physical","twice","gust"],
+    squall:["风过百川","air",78,96,10,"special","spread","gale"],
+    skyplunge:["垂天俯冲","air",108,94,5,"physical","recoil","gale"],
+    copperhorn:["铜角冲","volt",60,100,18,"physical","para","jolt"],
+    coilbreath:["收雷息","volt",0,100,10,"status","ward","focus"],
+    wireflash:["金丝闪","volt",71,97,12,"special","keen","arc"],
+    stormwire:["雨弦","volt",65,100,12,"special","rainbound","jolt"],
+    twindrum:["对鼓鸣","volt",36,95,12,"special","twice","surge"],
+    thundernet:["横江电网","volt",76,95,10,"special","spread","arc"],
+    stormhoof:["震霄踏","volt",105,92,5,"physical","breach","surge"],
+    knuckle:["叩门拳","plain",60,100,20,"physical","","bump"],
+    quietpulse:["调息","plain",0,100,8,"status","heal","focus"],
+    bellnote:["弦外音","plain",69,100,12,"special","keen","call"],
+    laststand:["背水踏","plain",66,100,12,"physical","comeback","bump"],
+    doubletap:["连环叩","plain",36,95,12,"physical","twice","dash"],
+    silkguard:["绡衣卸力","plain",0,100,10,"status","ward","veil"],
+    changering:["长吟破阵","plain",102,92,5,"special","breach","call"]
+  };
+  const tracks={
+    leaf:["reedlash","budshelter","thornpoint","dewpress","leafduet","seedtide","springburst"],
+    fire:["kilnkick","emberdance","ignition","sunforge","twinspark","ashwave","heartfurnace"],
+    water:["tideclaw","springbath","pearljet","rainwake","twinrill","undertow","seagate"],
+    rock:["jadehum","stonewrap","slateedge","faultbell","twintile","quarryfall","peakpress"],
+    air:["reedwhistle","tailstep","quillcut","headwind","wingbeat","squall","skyplunge"],
+    volt:["copperhorn","coilbreath","wireflash","stormwire","twindrum","thundernet","stormhoof"],
+    plain:["knuckle","quietpulse","bellnote","laststand","doubletap","silkguard","changering"]
+  };
+  // Two family techniques reflect its ecology, and carry across every evolution.
+  const familyArts={
+    moss:["jadehum","springbath"],ember:["tailstep","laststand"],tide:["budshelter","reedwhistle"],
+    wind:["bellnote","wingbeat"],stone:["dewpress","quarryfall"],spark:["knuckle","stormwire"],
+    crab:["tideclaw","twintile"],moth:["dewpress","silkguard"],snail:["jadehum","bellnote"],
+    twig:["reedlash","quillcut"],ape:["doubletap","peakpress"],tuft:["lull","laststand"],
+    fry:["twindrum","headwind"],kui:["jadehum","quarryfall"],otter:["budshelter","springbath"],
+    songfoal:["bellnote","springburst"],reedturtle:["knuckle","undertow"],wishgrass:["springbath","silkguard"],
+    waylamp:["reedwhistle","stormwire"],redgill:["bellnote","sunforge"],firestilt:["quillcut","skyplunge"],
+    chaosdrum:["jadehum","twindrum"],redpanther:["doubletap","slateedge"],sentrylynx:["knuckle","headwind"],
+    cliffbee:["thornpoint","quillcut"],mistfin:["reedwhistle","skyplunge"],whirldove:["reedlash","headwind"],
+    cicadacup:["bellnote","twinrill"],gourlfish:["budshelter","seedtide"],rootmarten:["stonewrap","slateedge"],
+    peonyveil:["lull","silkguard"],inkbutterfly:["jadehum","dewpress"],rainpearl:["pearljet","jadehum"],
+    petalfinch:["leafduet","tailstep"],rootboar:["knuckle","faultbell"],jadechirp:["doubletap","peakpress"],
+    maptoad:["reedwhistle","rainwake"],cagekatydid:["quillcut","leafduet"],tilegecko:["jadehum","peakpress"],
+    milletmouse:["budshelter","seedtide"],ochrefawn:["jadehum","quarryfall"],plasterbat:["bellnote","dewpress"],
+    ochresnake:["tideclaw","faultbell"],brushrat:["springbath","pearljet"],tileowl:["reedwhistle","stonewrap"],
+    fanpup:["gust","ashwave"],coalram:["kilnkick","laststand"],gourdmole:["tideclaw","undertow"],
+    ashkite:["cinder","sunforge"],fordterrapin:["springbath","stonewrap"],glazecko:["sunforge","silkguard"],
+    pillarox:["stonewrap","laststand"],skythread:["silkguard","springburst"],emberwren:["twinspark","reedwhistle"],
+    cloudclam:["pearljet","skyplunge"],pestlekit:["knuckle","springbath"],moonfrog:["jadehum","twinrill"],
+    laurelstag:["reedlash","slateedge"],silvercarp:["jadehum","silkguard"],mistmantis:["quillcut","twintile"],
+    laughkit:["tailstep","leafduet"],wallmouse:["stonewrap","quillcut"],ropesquirrel:["reedlash","wingbeat"],
+    marketmirage:["jadehum","dewpress"],maskstoat:["lull","faultbell"]
+  };
+  return {moves,tracks,familyArts};
+})();
+if(typeof module!=="undefined")module.exports=MistSchool;

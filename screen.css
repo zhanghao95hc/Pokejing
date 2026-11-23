@@ -184,7 +184,7 @@ body[data-scene=battle] #top { top: max(14px,env(safe-area-inset-top)); }
 
 .map.ridge, .travel-atlas.ridge { background-image: url("assets/color/ridge.webp"); }
 .map.marsh, .travel-atlas.marsh { background-image: url("assets/color/marsh.webp"); }
-.arena.region-marsh { background-image: url("assets/color/tidal-arena.webp"); }
+.arena.region-marsh, .arena.region-saltRoad { background-image: url("assets/color/tidal-arena.webp"); }
 .chapter-note { display: grid; grid-template-columns: 82px 1fr; gap: 14px; align-items: center; margin: 15px 0; }
 .chapter-print { height: 100%; min-height: 88px; border-radius: 3px; background: url("assets/color/ridge.webp") 64% 30% / cover; }
 .chapter-note.marsh .chapter-print { background-image: url("assets/color/marsh.webp"); }
@@ -193,7 +193,7 @@ body[data-scene=battle] #top { top: max(14px,env(safe-area-inset-top)); }
 .chapter-note small { color: #6b5130; }
 .spot-panel .chapter-brief { border-left: 2px solid #a86537; padding-left: 10px; }
 
-.field-animal { position: absolute; z-index: 2; pointer-events: none; width: 3.7%; height: 6%; object-fit: contain; transform: translate(-50%, -90%); filter: drop-shadow(0 1px 1px #4839215e); }
+.field-animal { position: absolute; z-index: 2; pointer-events: none; width: 3.7%; height: 6%; object-fit: contain; transform: translate(-50%, -99%); filter: drop-shadow(0 1px 1px #4839215e); }
 .ridge .foot-grass { background-image: url("assets/color/ridge-grass.webp"); }
 .marsh .foot-grass { background-image: url("assets/color/marsh-reeds.webp"); }
 .ridge .field-cover, .marsh .field-cover { filter: contrast(1.32) saturate(1.5) brightness(.87); }
@@ -210,3 +210,59 @@ body[data-scene=battle] #top { top: max(14px,env(safe-area-inset-top)); }
   .dex-family .dex-entry { display: grid; grid-template-columns: 37% 1fr; }
   .menu-body .dex-family .plate { height: 100%; min-height: 116px; }
 }
+
+.map.lanternTown, .travel-atlas.lanternTown { background-image: url("assets/color/lanternTown.webp"); }
+.map.bambooRoad, .travel-atlas.bambooRoad { background-image: url("assets/color/bambooRoad.webp"); }
+.map.kiln, .travel-atlas.kiln { background-image: url("assets/color/kiln.webp"); }
+.map.saltport, .travel-atlas.saltport { background-image: url("assets/color/saltport.webp"); }
+.map.saltRoad, .travel-atlas.saltRoad { background-image: url("assets/color/saltRoad.webp"); }
+.map.echoCave, .travel-atlas.echoCave { background-image: url("assets/color/echoCave.webp"); }
+.bambooRoad .walker, .saltRoad .walker { height: max(18px,6%); }
+.bambooRoad .foot-grass, .saltRoad .foot-grass { width: 1.6%; height: 1.9%; }
+.saltRoad .foot-grass { background-image: url("assets/color/reeds.webp"); }
+.saltRoad .field-cover { filter: contrast(1.18) saturate(1.35) brightness(.9); }
+.field-figure { position:absolute; display:block; transform:translate(-50%,-99%); margin:0; padding:0; border:0; background:transparent; cursor:pointer; touch-action:manipulation; }
+.field-figure.villager { width:6.8%; height:8.5%; }
+.field-figure.companion { width:5.1%; height:5.7%; }
+.field-figure img { display:block; width:100%; height:100%; object-fit:contain; object-position:center bottom; pointer-events:none; filter:drop-shadow(0 1px 1px #41372f6b); }
+.field-figure:focus-visible { outline:1px solid #ffefbd; outline-offset:2px; border-radius:4px; }
+.bambooRoad .villager, .saltRoad .villager { width:4.53%; height:5.67%; }
+.bambooRoad .companion, .saltRoad .companion { width:3.4%; height:3.8%; }
+#dialog:has(.road-chat) { position:fixed; inset:auto 0 max(20px,env(safe-area-inset-bottom)); margin:auto; padding:14px 20px; width:min(92vw,570px); border:1px solid #ae946a; border-radius:5px; box-shadow:0 6px 32px #20362945; }
+#dialog:has(.road-chat)::backdrop { background:#17292035; }
+#dialog:has(.road-chat) .dialog-head { padding-bottom:6px; margin-bottom:4px; }
+#dialog:has(.road-chat) h2 { font-size:19px; }
+.road-chat { display:grid; grid-template-columns:minmax(84px,25%) 1fr; align-items:center; gap:14px; }
+.road-chat p { margin:4px 0; line-height:1.65; }
+.road-chat small { color:#586952; }
+.chat-pair { display:flex; align-items:flex-end; height:84px; }
+.chat-pair img { width:60%; height:100%; object-fit:contain; object-position:bottom; }
+.chat-pair img+img { width:52%; height:65%; margin-left:-12%; }
+.field-sign { position: absolute; z-index: 2; display: flex; align-items: center; gap: 3px; min-width: 0; white-space: nowrap; transform: translate(-50%,22%); padding: 2px 6px; border: 1px solid #a49069; border-radius: 2px; background: #f7ebcfed; color: #413729; box-shadow: 0 1px 3px #372c2570; font: 600 clamp(8px,.75vw,12px) var(--serif); cursor: pointer; }
+.field-sign .ico { width: 1em; height: 1em; }
+.bambooRoad .field-sign, .saltRoad .field-sign { transform: translate(-50%,15%) scale(.78); }
+.chapter-map { margin: 12px 0; border-block: 1px solid #c8bb9c; }
+.chapter-map summary { cursor: pointer; padding: 9px 0; color: var(--pine); font-weight: 700; }
+.chapter-map ol { list-style: none; padding: 0; margin: 2px 0; display: grid; grid-template-columns: repeat(auto-fit,minmax(115px,1fr)); gap: 8px; }
+.chapter-map li { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.chapter-map li[aria-current] b { color: #853f28; }
+.chapter-map img { width: 40px; height: 33px; object-fit: cover; border-radius: 2px; }
+.chapter-map small { display: block; color: #655f52; }
+.chapter-map p { margin: 8px 0 12px; font-size: 13px; line-height: 1.6; }
+
+.folio-tabs { display:flex; gap:8px; margin-bottom:14px; }
+.folio-select { display:flex; gap:10px; align-items:center; font-weight:700; color:var(--pine); margin:.7em 0; }
+.folio-select select { flex:1; min-width:0; padding:7px; background:#fff9e8; border:1px solid #b9a581; color:#364d43; }
+.study-group { margin:1em 0; }
+.study-group h3 { padding-bottom:4px; border-bottom:1px solid #bfa883; color:var(--pine); }
+.study-group .dialog-row small { display:block; color:#786646; }
+.study-group .dialog-row b { font-family:var(--serif); }
+.study-group .dialog-row .btn { flex-shrink:0; }
+
+.folio-views { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
+.folio-views figure { margin:0; text-align:center; padding:10px; background:#efe8d8; }
+.folio-views img { width:100%; height:clamp(98px,17vh,154px); object-fit:contain; }
+.folio-views figcaption { color:#5b6759; font-size:.82rem; }
+.folio-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:3px 14px; }
+.folio-stats div { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--line); }
+.folio-stats dd { margin:0; font-variant-numeric:tabular-nums; }

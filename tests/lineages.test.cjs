@@ -2,15 +2,16 @@
 const test=require("node:test"),assert=require("node:assert/strict");
 const fs=require("node:fs"),path=require("node:path");
 const G=require("../game"),C=require("../catalog"),F=require("../field-rules");
-const fixed=()=>.42,lines=C.lineages;
+const fixed=()=>.42,lines=C.lineages.filter(line=>!C.species[line[0]].reserve);
 const name=k=>C.species[k].name;
 function saveWith(m){
   const s=G.fresh();G.start(s,"moss",fixed);s.party=[m];s.seen=[m.kind];s.caught=[m.kind];return s;
 }
 test("所有图鉴编号唯一，十五条谱系均含两次可达进化及完整素材",()=>{
   assert.equal(lines.length,15);assert.equal(new Set(lines.flat()).size,45);
-  assert.equal(Object.keys(C.species).length,45);
-  assert.deepEqual(Object.values(C.species).map(s=>+s.no).sort((a,b)=>a-b),Array.from({length:45},(_,i)=>i+1));
+  const coastal=Object.values(C.species).filter(d=>!d.reserve);
+  assert.equal(coastal.length,45);
+  assert.deepEqual(coastal.map(s=>+s.no).sort((a,b)=>a-b),Array.from({length:45},(_,i)=>i+1));
   for(const line of lines){
     const [base,middle,final]=line;
     assert.equal(C.evolutions[base],middle);assert.equal(C.evolutions[middle],final);

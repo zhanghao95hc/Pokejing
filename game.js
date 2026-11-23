@@ -13,18 +13,21 @@ const MistGame = (() => {
   function makeMon(kind,level,rng=Math.random) {
     const mon={kind,level,iv:Array.from({length:6},()=>Math.floor(rng()*32)),nature:Math.floor(rng()*25),xp:0,hp:0,status:"",skills:[]};
     F.ensureMon(mon);
-    mon.skills=species[kind].moves.slice(0,level>=7?4:3).map(id=>({id,pp:moves[id][4]}));
+    const available=F.levelPath(kind).filter(e=>e.level<=level).map(e=>e.id);
+    const core=species[kind].moves.slice(0,2);
+    const slots=level>=7?4:3,remaining=available.filter(id=>!core.includes(id));
+    mon.skills=core.concat(remaining.slice(-(slots-core.length))).map(id=>({id,pp:moves[id][4]}));
     mon.hp=stat(mon,0);
     return mon;
   }
   function fresh() {
-    return {version:2,starter:null,party:[],box:[],seen:[],caught:[],supply:{bells:6,salves:3,...F.restock()},coins:70,region:"coast",chapters:chapters.fresh(),rod:false,secondBadge:false,pos:{...T.spawn},camp:false,badge:false,steps:0,battle:null,notice:"",sound:false,grace:4};
+    return {version:2,starter:null,party:[],box:[],seen:[],caught:[],supply:{bells:6,salves:3,...F.restock()},coins:70,region:"coast",chapters:chapters.fresh(),expedition:chapters.expedition(),rod:false,secondBadge:false,pos:{...T.spawn},camp:false,badge:false,steps:0,battle:null,notice:"",sound:false,grace:4};
   }
   function record(list,kind) {if(!list.includes(kind)) list.push(kind);}
   function start(s,kind,rng=Math.random) {
     if(s.starter || !C.starters.includes(kind)) return false;
     s.starter=kind;s.party.push(makeMon(kind,5,rng));s.seen.push(kind);s.caught.push(kind);
-    s.notice="青禾在北边的练习场等你。顺路去风铃草甸，试着结识一位野生伙伴。";
+    s.notice="北边练习场的青禾在等你。研究站外通往灯匠镇，桑婆的灯纸作坊正在找帮手。";
     return true;
   }
   function restore(s) {
@@ -40,23 +43,33 @@ const MistGame = (() => {
       lines.push(species[from].name+"进化为"+name(mon)+"！");
     }
   }
+  const naturalMoves=m=>F.levelPath(m.kind).filter(e=>e.level<=m.level).map(e=>e.id);
+  function learnGrowth(mon,before,lines){
+    for(const id of naturalMoves(mon)){
+      if(before.has(id)||mon.skills.some(sk=>sk.id===id)||mon.offers?.includes(id))continue;
+      if(mon.skills.length<4){F.equipSkill(mon,id,mon.skills.length);lines.push(name(mon)+"领悟了「"+moves[id][0]+"」。");}
+      else{(mon.offers??=[]).push(id);lines.push(name(mon)+"可学习「"+moves[id][0]+"」，战后可选择替换。");}
+    }
+  }
+  function resolveOffer(s,index,slot){
+    const m=s.party[index],id=m?.offers?.[0];if(s.battle||!id)return false;
+    if(slot!==-1&&!m.skills.some(sk=>sk.id===id)&&!F.equipSkill(m,id,slot))return false;
+    m.offers.shift();if(!m.offers.length)delete m.offers;
+    return true;
+  }
   function gain(mon,amount,lines){
     const transitions=[];
-    evolveReady(mon,lines,transitions);
+    const before=new Set(naturalMoves(mon));evolveReady(mon,lines,transitions);learnGrowth(mon,before,lines);
     if(mon.level>=50)return transitions;
     mon.xp+=amount;
     lines.push(name(mon)+"获得 "+amount+" 点经验。");
     while(mon.xp>=threshold(mon.level)&&mon.level<50){
-      const oldMax=stat(mon,0);
+      const previous=new Set(naturalMoves(mon)),oldMax=stat(mon,0);
       mon.xp-=threshold(mon.level);mon.level++;
       if(mon.hp>0)mon.hp+=stat(mon,0)-oldMax;
       lines.push(name(mon)+"升至 Lv."+mon.level+"！");
       evolveReady(mon,lines,transitions);
-      if(mon.level===7){
-        const id=species[mon.kind].moves[3];
-        if(!mon.skills.some(k=>k.id===id)&&mon.skills.length<4){mon.skills.push({id,pp:moves[id][4]});lines.push("领悟了「"+moves[id][0]+"」。");}
-        else lines.push("可在整备招式中选择「"+moves[id][0]+"」。");
-      }
+      learnGrowth(mon,previous,lines);
     }
     if(mon.level===50)mon.xp=0;
     return transitions;
@@ -76,7 +89,7 @@ const MistGame = (() => {
     const mon=s.party[index];
     if(s.battle||!mon)return false;
     const transitions=[],lines=[];
-    evolveReady(mon,lines,transitions);
+    const before=new Set(naturalMoves(mon));evolveReady(mon,lines,transitions);learnGrowth(mon,before,lines);
     if(!transitions.length)return false;
     recordGrowth(s,mon,transitions);
     s.notice=lines.join(" ");return true;
@@ -94,7 +107,13 @@ const MistGame = (() => {
   function canBeacon(s){return s.badge||(s.camp&&s.chapters.ridge===2);}
   function hasLocal(s){return s.caught.some(k=>localKinds.includes(C.familyOf[k]?.[0]));}
   function canDuel(s){return s.badge&&s.region==="cove"&&(s.secondBadge||s.chapters.marsh===2&&hasLocal(s));}
+  const trainers={
+    courier:{name:"驿骑阿栩",region:"bambooRoad",team:[["wind",6],["twig",7]],reward:28},
+    warden:{name:"巡堤人阿苇",region:"saltRoad",team:[["crab",10],["snail",11]],reward:46}
+  };
+  function trainerName(mode){return trainers[mode]?.name||({camp:"巡林员青禾",dome:"领航员汐弦",beacon:"守灯人岑川"}[mode]);}
   function wildHabitat(s,fish,track){
+    if(T.areas[s.region].wild)return T.areas[s.region].wild;
     if(track==="nest")return ["twig","tuft","tuft"];
     if(track==="inlet")return ["fry","otter","otter"];
     if(s.region==="ridge")return s.pos.x>=34?["ape","ape","twig","tuft"]:["twig","twig","ape","tuft"];
@@ -105,18 +124,21 @@ const MistGame = (() => {
   function encounter(s,mode,rng=Math.random) {
     const track=mode==="nest"||mode==="inlet"?mode:null;
     if(track){if(T.near(s.pos,s.region)!==track)return false;mode="wild";}
-    if(!s.starter||s.battle||!["wild","fish","camp","beacon","dome"].includes(mode)||mode==="beacon"&&!canBeacon(s)||
+    const trainer=Object.hasOwn(trainers,mode)?trainers[mode]:null;
+    if(trainer&&(trainer.region!==s.region||T.near(s.pos,s.region)!==mode||s.expedition.trained.includes(mode)))return false;
+    if(mode==="wild"&&!T.grassCells(s.region).length)return false;
+    if(!s.starter||s.battle||(!trainer&&!["wild","fish","camp","beacon","dome"].includes(mode))||mode==="beacon"&&!canBeacon(s)||
       mode==="fish"&&(!s.rod||s.region!=="cove")||mode==="dome"&&!canDuel(s)) return false;
     const fish=mode==="fish";if(fish)mode="wild";
     const pool=wildHabitat(s,fish,track);
-    const base={coast:3,ridge:5,cove:7,marsh:8}[s.region];
-    const rivals=mode==="wild"?[makeMon(pool[Math.floor(rng()*pool.length)],base+Math.floor(rng()*(s.badge?5:3)),rng)]:
+    const base=T.areas[s.region].level??{coast:3,ridge:5,cove:7,marsh:8}[s.region];
+    const rivals=trainer?trainer.team.map(([kind,level])=>makeMon(kind,level,rng)):mode==="wild"?[makeMon(pool[Math.floor(rng()*pool.length)],base+Math.floor(rng()*(s.badge?5:3)),rng)]:
       mode==="camp"?[makeMon("spark",5,rng)]:mode==="dome"?[makeMon("crab",10,rng),makeMon("snail",12,rng),makeMon("glider",14,rng)]:[makeMon("twig",6,rng),makeMon("stone",7,rng)];
     if(mode==="dome")rivals[2].held="berry";
     const lead=s.party.findIndex(m=>m.hp>0);
     if(lead<0) return false;
-    const intro=mode==="wild"?(fish?"浮标沉了下去，钓起了":track?"沿着踪迹，你遇见了":"草叶一动，出现了")+name(rivals[0])+"！":(mode==="camp"?"巡林员青禾":mode==="dome"?"领航员汐弦":"守灯人岑川")+"派出了"+name(rivals[0])+"。";
-    s.battle={mode,rivals,foe:0,lead,round:1,playerStage:stages(),foeStage:stages(),participants:[lead],lines:[intro],history:[intro],result:null,...F.initialWeather(s)};
+    const intro=mode==="wild"?(fish?"浮标沉了下去，钓起了":track?"沿着踪迹，你遇见了":"草叶一动，出现了")+name(rivals[0])+"！":trainerName(mode)+"派出了"+name(rivals[0])+"。";
+    s.battle={entry:fish?"water":mode!=="wild"?"trainer":["cove","marsh","saltRoad"].includes(s.region)?"water":"grass",mode,rivals,foe:0,lead,round:1,playerStage:stages(),foeStage:stages(),participants:[lead],lines:[intro],history:[intro],result:null,...F.initialWeather(s)};
     record(s.seen,rivals[0].kind);return true;
   }
   const factor=n=>n>=0?(2+n)/2:2/(2-n);
@@ -132,13 +154,16 @@ const MistGame = (() => {
       const rate=sk=>{
         const [,type,power,accuracy,,,effect]=moves[sk.id];
         if(!power){
+          if(effect==="heal")return m.hp<stat(m,0)*.55?95:0;
+          if(effect==="cleanse")return m.status?85:0;
+          if(effect==="haste"||effect==="ward")return (mods[effect==="haste"?"speed":"resist"]||0)<2?25:0;
           if(effect==="sleep")return !target.status?45:0;
           if(effect==="rain"||effect==="sun")return b.weather!==effect?37:0;
           if(effect==="guard"&&(mods.guard||0)<2)return 18;
           return 8;
         }
         if(type==="volt"&&F.ability(target)==="coil")return 0;
-        return power*accuracy/100*C.effectiveness(type,target.kind)*(C.affinity(m.kind).includes(type)?1.5:1)*F.weatherPower(b,type);
+        return power*(effect==="twice"?2:1)*accuracy/100*C.effectiveness(type,target.kind)*(C.affinity(m.kind).includes(type)?1.5:1)*F.weatherPower(b,type);
       };
       const ranked=options.map(sk=>({id:sk.id,score:rate(sk)*(.8+.4*rng())})).sort((a,c)=>c.score-a.score);
       return ranked[0].id;
@@ -171,7 +196,13 @@ const MistGame = (() => {
         lines.push(prefix+(am.shield?"，本回合获得保护。":"，连续展开护幕失败。"));
       }else if(effect==="rain"||effect==="sun"){b.weather=effect;b.weatherTurns=5;lines.push(prefix+"，场地转为"+F.weatherNames[effect]+"。");}
       else if(effect==="sleep"){if(t.status)lines.push(prefix+"，对手已有异常状态。");else{t.status="sleep";t.sleep=1+Math.floor(rng()*3);lines.push(prefix+"，"+name(t)+"睡着了。");F.triggerHeld(t,lines);}}
-      else if(effect==="focus"){am.special=clamp((am.special||0)+1,-6,6);lines.push(prefix+"，特攻提高了。");}
+      else if(effect==="heal"){
+        const old=a.hp;a.hp=Math.min(stat(a,0),a.hp+Math.floor(stat(a,0)/2));lines.push(prefix+"，恢复 "+(a.hp-old)+" 点体力。");
+      }else if(effect==="cleanse"){a.status="";a.sleep=0;lines.push(prefix+"，洗去了身上的异常。");}
+      else if(effect==="ward"||effect==="haste"){
+        const key=effect==="ward"?"resist":"speed";am[key]=clamp((am[key]||0)+1,-6,6);
+        lines.push(prefix+(effect==="ward"?"，特防":"，速度")+"升至 "+am[key]+" 级。");
+      }else if(effect==="focus"){am.special=clamp((am.special||0)+1,-6,6);lines.push(prefix+"，特攻提高了。");}
       else if(effect==="guard") {
         const old=am.guard;am.guard=clamp(old+1,-6,6);
         lines.push(prefix+(old===am.guard?"，防御已经到顶。":"，防御提高了。"));
@@ -185,14 +216,15 @@ const MistGame = (() => {
       t.hp=Math.min(stat(t,0),t.hp+Math.max(1,Math.floor(stat(t,0)/4)));
       lines.push(prefix+"，"+name(t)+"以蓄流吸收了电能。");return "absorb";
     }
-    const phys=["plain","rock","air"].includes(type),mult=C.effectiveness(type,t.kind);
-    const crit=rng()<1/16&&F.ability(t)!=="shell";
-    const atkStage=phys?am.attack:am.special||0,defStage=phys?tm.guard:0;
+    const phys=moves[id][5]==="physical",mult=C.effectiveness(type,t.kind);
+    const crit=rng()<(effect==="keen"?1/4:1/16)&&F.ability(t)!=="shell";
+    const atkStage=phys?am.attack:am.special||0,defStage=effect==="breach"?0:phys?tm.guard:tm.resist||0;
     const offense=stat(a,phys?1:3)*factor(crit?Math.max(0,atkStage):atkStage)*(phys&&a.status==="burn"?.5:1);
     const defense=stat(t,phys?2:4)*factor(crit?Math.min(0,defStage):defStage);
     const own=C.affinity(a.kind).includes(type),low=a.hp<=stat(a,0)/3;
     const surge=low&&({roots:"leaf",ember:"fire",tide:"water"}[F.ability(a)]===type);
-    const damage=Math.max(1,Math.floor(((2+a.level*.4)*power*offense/(50*defense)+2)*
+    const empowered=(effect==="rainbound"&&b.weather==="rain")||(effect==="sunbound"&&b.weather==="sun")||(effect==="punish"&&t.status)||(effect==="comeback"&&a.hp<=stat(a,0)/2);
+    const damage=Math.max(1,Math.floor(((2+a.level*.4)*power*(empowered?1.5:1)*offense/(50*defense)+2)*
       (own?1.5:1)*(own&&a.held==="lens"?1.1:1)*(surge?1.5:1)*F.weatherPower(b,type)*mult*spread*(crit?2:1)*(.85+.15*rng())));
     const lost=Math.min(t.hp,damage); t.hp-=lost;
     lines.push(prefix+"，造成 "+lost+" 点伤害。"+(mult>1?"属性克制！":mult<1?"效果较弱。":"")+(crit?"命中要害！":""));
@@ -212,13 +244,20 @@ const MistGame = (() => {
   }
   function attack(source,targets,id,b,rng,events){
     if(!beforeMove(source.mon,id,source.mods,b.lines,rng))return;
-    const event=events&&{move:id,source:snapshot(source),hits:[]};
-    for(const target of targets){
-      const before=event&&snapshot(target);
-      const outcome=resolveHit(source.mon,target.mon,id,source.mods,target.mods,b,rng,targets.length>1?.75:1);
-      if(event)event.hits.push({before,after:snapshot(target),outcome});
+    const repeats=moves[id][6]==="twice"?2:1;
+    for(let strike=0;strike<repeats;strike++){
+      const event=events&&{move:id,source:snapshot(source),hits:[]};
+      let landed=false;
+      for(const target of targets){
+        if(!target.mon.hp)continue;
+        const before=event&&snapshot(target);
+        const outcome=resolveHit(source.mon,target.mon,id,source.mods,target.mods,b,rng,targets.length>1?.75:1);
+        if(event)event.hits.push({before,after:snapshot(target),outcome});
+        if(outcome==="hit")landed=true;
+      }
+      if(event&&event.hits.length){event.after=snapshot(source);events.push(event);}
+      if(!landed||!source.mon.hp||targets.every(t=>!t.mon.hp))break;
     }
-    if(event){event.after=snapshot(source);events.push(event);}
   }
   function exchange(s,index) {
     const b=s.battle;
@@ -236,15 +275,16 @@ const MistGame = (() => {
       }
     }
     if(!s.party.some(m=>m.hp>0)) {
-      b.result="loss";b.lines.push("伙伴们需要休息。研究站会为全队恢复体力。");return;
+      b.result="loss";b.lines.push("伙伴们需要休息。回补给点为全队恢复体力。");return;
     }
     if(enemy.hp<=0) {
       if(b.foe+1<b.rivals.length) {
         b.foe++;b.foeStage=stages();b.participants=[b.lead];record(s.seen,b.rivals[b.foe].kind);
-        b.lines.push((b.mode==="dome"?"领航员":"守灯人")+"派出了"+name(b.rivals[b.foe])+"！");
+        b.lines.push(trainerName(b.mode)+"派出了"+name(b.rivals[b.foe])+"！");
       } else {
         b.result="win";
-        const reward={wild:6,camp:24,beacon:40,dome:75}[b.mode];s.coins+=reward;b.lines.push("获得 "+reward+" 枚潮币。");
+        if(trainers[b.mode])record(s.expedition.trained,b.mode);
+        const reward=trainers[b.mode]?.reward??{wild:6,camp:24,beacon:40,dome:75}[b.mode];s.coins+=reward;b.lines.push("获得 "+reward+" 枚潮币。");
         if(b.mode==="camp"&&!s.camp) {s.camp=true;s.supply.salves+=2;b.lines.push("青禾交给你两份药膏，解开练习场的栈门：「海上少了一点灯火。上栖风岭听听风，我在岸边接船。」");}
         if(b.mode==="beacon"&&!s.badge) {s.badge=true;b.lines.push("获得潮光徽章！灯台与研究站开通了前往盐镜湾的航线。");}
         if(b.mode==="dome"&&!s.secondBadge){s.secondBadge=true;b.lines.push("汐弦将镜潮徽章压在那张拓片上：「让船找到归路的人，也该在这张海图上留个名字。」");}
@@ -311,7 +351,7 @@ const MistGame = (() => {
     if(allies.length<2) return false;
     const rivals=[makeMon("spark",7,rng),makeMon("tide",8,rng)];
     const intro="青禾与岑川并肩迎战。为两位出战伙伴分别选择招式与目标。";
-    s.battle={mode:"pair",allies,rivals,round:1,modA:s.party.map(stages),modF:rivals.map(stages),
+    s.battle={entry:"pair",mode:"pair",allies,rivals,round:1,modA:s.party.map(stages),modF:rivals.map(stages),
       participants:[...allies],lines:[intro],history:[intro],result:null,...F.initialWeather(s)};
     for(const m of rivals) record(s.seen,m.kind);
     return true;
@@ -390,7 +430,14 @@ const MistGame = (() => {
   function leaveBattle(s) {
     const b=s.battle;if(!b?.result) return false;
     s.notice=b.lines.join(" ");
-    if(b.result==="loss"){restore(s);if(s.region==="ridge")s.region="coast";if(s.region==="marsh")s.region="cove";s.pos=s.region==="cove"?T.toGrid(T.coveSites.hut.at):{...T.spawn};s.notice="全队已在补给点恢复。你可以调整首发，准备好后再去挑战。";}
+    if(b.result==="loss"){
+      restore(s);
+      const oldField=["coast","ridge","cove","marsh"].includes(s.region),coastal=T.areas[s.region].chapter===1;
+      s.region=oldField?(coastal?"coast":"cove"):(coastal?"lanternTown":"saltport");
+      const home={coast:"lab",cove:"hut",lanternTown:"lampInn",saltport:"quayInn"}[s.region];
+      s.pos=T.toGrid(T.siteList(s.region)[home].at,s.region);
+      s.notice="全队已在"+T.siteList(s.region)[home].name+"恢复。准备好后可以再去挑战。";
+    }
     s.grace=5;s.battle=null;return true;
   }
   function step(s,pos,rng=Math.random) {
@@ -404,23 +451,28 @@ const MistGame = (() => {
       Array.isArray(m.iv)&&m.iv.length===6&&m.iv.every(Number.isFinite)&&Number.isFinite(m.hp)&&m.hp>=0&&m.hp<=stat(m,0)&&
       Number.isFinite(m.xp)&&Number.isInteger(m.nature)&&m.nature>=0&&m.nature<25&&Array.isArray(m.ev)&&m.ev.length===6&&
       m.ev.every(v=>Number.isInteger(v)&&v>=0&&v<=255)&&m.ev.reduce((a,b)=>a+b,0)<=510&&(!m.held||F.stock[m.held]?.hold)&&
+      [m.offers,m.remembered].every(list=>list===undefined||(Array.isArray(list)&&list.every(id=>Object.hasOwn(moves,id))))&&
       Array.isArray(m.skills)&&m.skills.length>0&&m.skills.length<=4&&m.skills.every(k=>!!moves[k.id]&&Number.isInteger(k.pp)&&k.pp>=0);
     if(!s||s.version!==2||!Object.hasOwn(T.areas,s.region)||!Number.isInteger(s.coins)||s.coins<0||!Array.isArray(s.party)||!s.party.every(mon)||s.party.length>6||!Array.isArray(s.box)||!s.box.every(mon)) return false;
     if((s.starter===null?s.party.length!==0:!C.starters.includes(s.starter)||!s.party.length)||!s.pos||!Number.isInteger(s.pos.x)||!Number.isInteger(s.pos.y)||!T.walkable(s.pos,s.region)||
       !Array.isArray(s.seen)||!Array.isArray(s.caught)||!s.supply||!Object.keys(F.stock).every(id=>Number.isInteger(s.supply[id])&&s.supply[id]>=0)) return false;
-    if(!chapters.valid(s.chapters))return false;
+    if(!chapters.valid(s.chapters)||!chapters.validExpedition(s.expedition))return false;
     if(!s.battle) return true;
     const b=s.battle;
     if(b.mode==="pair") return Array.isArray(b.rivals)&&b.rivals.length===2&&b.rivals.every(mon)&&Array.isArray(b.allies)&&
       b.allies.every(i=>!!s.party[i])&&Array.isArray(b.modA)&&b.modA.length===s.party.length&&Array.isArray(b.modF)&&b.modF.length===2&&
       Array.isArray(b.lines)&&Array.isArray(b.history)&&Array.isArray(b.participants);
-    return ["camp","beacon","wild","dome"].includes(b.mode)&&Array.isArray(b.rivals)&&b.rivals.every(mon)&&!!b.rivals[b.foe]&&!!s.party[b.lead]&&
+    return (Object.hasOwn(trainers,b.mode)||["camp","beacon","wild","dome"].includes(b.mode))&&Array.isArray(b.rivals)&&b.rivals.every(mon)&&!!b.rivals[b.foe]&&!!s.party[b.lead]&&
       Array.isArray(b.lines)&&Array.isArray(b.history)&&Array.isArray(b.participants)&&b.participants.every(i=>!!s.party[i])&&!!b.playerStage&&!!b.foeStage;
   }
   function loadSave(previous){
     const s=F.upgrade(previous);
     if(!s||!Object.hasOwn(T.areas,s.region))return null;
     s.chapters??=chapters.fresh();
+    if(s.expedition===undefined){
+      s.expedition=chapters.expedition();
+      s.expedition.legacy=Object.keys(chapters.errands).filter(id=>s.chapters[id]>0||s.region===id||(id==="ridge"?s.badge:s.secondBadge));
+    }
     if(!T.walkable(s.pos,s.region)){
       const ground=T.nearestGround(s.pos,s.region);
       if(!ground)return null;
@@ -428,6 +480,6 @@ const MistGame = (() => {
     }
     return valid(s)?s:null;
   }
-  return {stat,threshold,makeMon,fresh,start,restore,gain,evolvePartner,encounter,act,leaveBattle,step,valid,loadSave,startPair,pairRound,availableMoves,sail,chapters,canBeacon,hasLocal,canDuel};
+  return {trainers,stat,resolveOffer,threshold,makeMon,fresh,start,restore,gain,evolvePartner,encounter,act,leaveBattle,step,valid,loadSave,startPair,pairRound,availableMoves,sail,chapters,canBeacon,hasLocal,canDuel};
 })();
 if(typeof module!=="undefined") module.exports=MistGame;

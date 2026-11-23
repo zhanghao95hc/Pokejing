@@ -86,15 +86,15 @@ const MistTheater=(()=>{
     const el=node("i","painted-fx",parent);el.style.backgroundImage='url("'+url+'")';return el;
   }
   async function playMove(arena,seats,event,caption,signal){
-    const move=event.move,url=folder+move+".webp",still=reduced();
-    const self=selfMoves.has(move),field=fieldMoves.has(move),melee=contact.has(move);
+    const actual=event.move,move=catalog.moves[actual][7]||actual,url=folder+move+".webp",still=reduced();
+    const self=selfMoves.has(move)||["haste","heal","ward","cleanse"].includes(catalog.moves[actual][6]),field=fieldMoves.has(actual),melee=contact.has(move);
     const actor=seats[event.source.key].img;
     showUnit(seats,event.source);event.hits.forEach(hit=>showUnit(seats,hit.before));
-    caption.textContent=catalog.species[event.source.kind].name+" · "+catalog.moves[move][0];
+    caption.textContent=catalog.species[event.source.kind].name+" · "+catalog.moves[actual][0];
     await loadForTurn(url,signal);
     if(signal.aborted)return;
     const layer=node("div","fx-layer",arena);
-    layer.dataset.move=move;layer.dataset.actor=event.source.key;
+    layer.dataset.move=actual;layer.dataset.actor=event.source.key;
     const hits=event.hits.map(hit=>({hit,el:sprite(layer,url),img:seats[hit.before.key].img}));
     const reaction=[],start=center(actor,arena);
     const aim=center(hits[0].img,arena),dir=aim.x>=start.x?1:-1;
@@ -285,10 +285,12 @@ const MistTheater=(()=>{
     const paint=scene.querySelector(".evo-portraits"),title=scene.querySelector("h2"),button=scene.querySelector("button"),label=scene.querySelector("small");
 
     const names=k=>catalog.species[k].name,young="assets/color/"+from+".webp",adult="assets/color/"+to+".webp",strip=folder+"evo-"+from+".webp";
-    const layers=[young,strip,strip,strip,adult].map((url,i)=>{
+    const painted=!!growthCaptions[from],frames=painted?[young,strip,strip,strip,adult]:[young,adult];
+    const last=frames.length-1;
+    const layers=frames.map((url,i)=>{
       const layer=node("div","evo-form",paint);
       layer.style.backgroundImage='url("'+url+'")';
-      if(i>0&&i<4){layer.classList.add("inbetween");layer.style.backgroundPositionX=((i-1)*50)+"%";}
+      if(painted&&i>0&&i<last){layer.classList.add("inbetween");layer.style.backgroundPositionX=((i-1)*50)+"%";}
       return layer;
     });
     title.textContent=names(from);layers[0].style.opacity=1;
@@ -300,23 +302,58 @@ const MistTheater=(()=>{
     scene.oncancel=e=>{e.preventDefault();click();};
     try{
       scene.showModal();
-      await Promise.all([load(young),load(adult),load(strip),load(folder+"sanctum.webp")]);
+      await Promise.all([...frames.map(load),load(folder+"sanctum.webp")]);
       if(!reduced())await timeline(3650,controller.signal,t=>{
-        const progress=clamp((t-.07)/.86)*4,phase=Math.floor(progress),mix=clamp((progress-phase-.55)/.45);
+        const progress=clamp((t-.07)/.86)*last,phase=Math.floor(progress),mix=clamp((progress-phase-.55)/.45);
         layers.forEach((el,i)=>{
           el.style.opacity=i===phase?1-mix:i===phase+1?mix:0;
           el.style.transform="translateY("+(-Math.sin(t*Math.PI)*3)+"%) scale("+(.84+t*.16)+")";
         });
         if(paint.dataset.phase!==String(phase)){
-          paint.dataset.phase=phase;label.textContent=phase>0&&phase<4?growthCaptions[from][phase-1]:"灵兽进化";
+          paint.dataset.phase=phase;label.textContent=painted&&phase>0&&phase<last?growthCaptions[from][phase-1]:"灵兽进化";
         }
-        if(phase===4)title.textContent=names(to);
+        if(phase===last)title.textContent=names(to);
       });
-      finished=true;scene.dataset.complete="true";paint.dataset.phase=4;
-      layers.forEach((el,i)=>{el.style.opacity=i===4?1:0;el.style.transform="none";});
-      label.textContent=catalog.familyOf[from][2]===to?"终阶 · 进化完成":"中阶 · 进化完成";title.textContent=names(from)+"进化为"+names(to);button.textContent="继续";
+      finished=true;scene.dataset.complete="true";paint.dataset.phase=last;
+      layers.forEach((el,i)=>{el.style.opacity=i===last?1:0;el.style.transform="none";});
+      label.textContent=catalog.familyOf[from].at(-1)===to?"终阶 · 进化完成":"中阶 · 进化完成";title.textContent=names(from)+"进化为"+names(to);button.textContent="继续";
       await confirmed;
     }finally{controller.abort();scene.close();scene.remove();}
   }
-  return {turn,evolution};
+  async function encounter(battle,paintBattle){
+    const theme=battle.entry||(battle.mode==="wild"?"grass":battle.mode==="pair"?"pair":"trainer");
+    const overlay=node("div","encounter-overlay "+theme,document.body);
+    const names=battle.rivals.slice(0,theme==="pair"?2:1).map(m=>catalog.species[m.kind].name).join("、");
+    overlay.innerHTML='<div class="entry-curtain"></div><div class="entry-sweep first"></div><div class="entry-sweep second"></div><span class="entry-call" role="status"></span><button class="btn entry-skip">略过入场</button>';
+    overlay.style.setProperty("--sweep",'url("assets/cinema/entry-'+theme+'.webp")');
+    overlay.querySelector(".entry-call").textContent=theme==="pair"?"双打 · "+names:theme==="trainer"?"迎战 · "+names:"相遇 · "+names;
+    const controller=new AbortController(),skip=()=>controller.abort(),button=overlay.querySelector("button");
+    button.onclick=skip;button.focus({preventScroll:true});
+    const key=e=>{if(["Escape","Enter"," "].includes(e.key)){e.preventDefault();e.stopPropagation();skip();}};
+    const hide=()=>{if(document.hidden)skip();};
+    document.addEventListener("keydown",key,true);document.addEventListener("visibilitychange",hide);
+    const animate=async(el,frames,time)=>{
+      if(controller.signal.aborted)return;
+      const a=el.animate(frames,{duration:time,easing:"ease-in-out",fill:"both"}),cancel=()=>a.cancel();
+      controller.signal.addEventListener("abort",cancel,{once:true});
+      try{await a.finished;}catch{}finally{controller.signal.removeEventListener("abort",cancel);a.cancel();}
+    };
+    const curtain=overlay.querySelector(".entry-curtain"),sweeps=overlay.querySelectorAll(".entry-sweep");
+    try{
+      if(!reduced()){
+        await Promise.all([animate(curtain,[{opacity:0},{opacity:.16,offset:.42},{opacity:1}],455),
+          ...[...sweeps].map((el,i)=>animate(el,[{transform:"translateX("+(i?95:-95)+"%)",opacity:0},{opacity:1,offset:.3},{transform:"translateX(0)",opacity:1}],455))]);
+      }
+      curtain.style.opacity=1;paintBattle();curtain.style.opacity=0;
+      overlay.classList.add("revealing");
+      const foes=document.querySelectorAll(".arena .fighter.foe,.arena .rival-side .pair-fighter>img"),allies=document.querySelectorAll(".arena .fighter.ally,.arena .pair-side:not(.rival-side) .pair-fighter>img");
+      if(!reduced())await Promise.all([animate(curtain,[{opacity:1},{opacity:0}],350),
+        ...[...foes].map(el=>animate(el,[{translate:"55% 0",filter:"brightness(.12)"},{translate:"0 0",filter:"brightness(.2)",offset:.52},{filter:"brightness(1)"}],790)),
+        ...[...allies].map(el=>animate(el,[{translate:"-50% 12%",opacity:0},{opacity:.2,offset:.22},{translate:"0 0",opacity:1}],730)),
+        ...[...sweeps].map((el,i)=>animate(el,[{transform:"translateX(0)",opacity:1},{transform:"translateX("+(i?-106:106)+"%)",opacity:0}],470))]);
+    }finally{
+      paintBattle();controller.abort();overlay.remove();document.removeEventListener("keydown",key,true);document.removeEventListener("visibilitychange",hide);
+    }
+  }
+  return {turn,evolution,encounter};
 })();

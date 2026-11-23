@@ -3,13 +3,15 @@
 const MistTrail = (() => {
   // Positions use the original save grid. Outline vertices use percentages of each painting.
   const W=60,H=40;
+  const atlas=typeof MistAtlas!=="undefined"?MistAtlas:require("./atlas.js");
+  const grid=region=>atlas.areas[region]?.grid||[W,H];
   const sites={
     lab:{name:"雾岬研究站",short:"研究站",icon:"home",at:[16.5,67],action:"休整补给",desc:"恢复全队体力和招式次数，补足结缘铃与药膏。"},
     grass:{name:"风铃草甸",short:"草甸",icon:"leaf",at:[37,63],action:"调查草丛",desc:"草叶正在轻轻摇晃，压低野生伙伴的体力后更容易结缘。"},
     camp:{name:"林间练习场",short:"练习场",icon:"flag",at:[53,26],action:"切磋对战",desc:"巡林员青禾在这里等候新搭档。战胜她可从营地上栖风岭，为晚归的渡船修好引灯。"},
     beacon:{name:"望潮灯台",short:"灯台",icon:"sun",at:[82,33],action:"挑战守灯人",desc:"守灯人岑川带着两位搭档，守护着雾岬的第一枚徽章。"}
   };
-  const toGrid=([x,y])=>({x:Math.round(x*W/100),y:Math.round(y*H/100)});
+  function toGrid([x,y],region){const [w,h]=grid(region);return {x:Math.round(x*w/100),y:Math.round(y*h/100)};}
   const coveSites={
     dock:{name:"盐镜渡口",short:"渡口",icon:"compass",at:[16,78],action:"返回雾岬",desc:"沿航线返回研究站，队伍和调查记录会一起带回。"},
     pool:{name:"潮声浅滩",short:"浅滩",icon:"drop",at:[55,78],action:"调查潮草",desc:"瓦当蟹和桂月蛾出没于潮草间。有钓竿时，也可以调查水下的伙伴。"},
@@ -28,9 +30,22 @@ const MistTrail = (() => {
     gong:{name:"回澜钟架",short:"潮钟",icon:"sun",at:[80,29],action:"查看引航钟",desc:"铜钟的余音绕泽一圈才散。引航人曾用长短不同的钟声为夜船报潮。"},
     inlet:{name:"归鳍汊口",short:"汊口",icon:"drop",at:[63,66],action:"沿鳍影探查",desc:"灯鳍苗聚在两股水流交会处。偶尔有白额潮獭从芦根下探出脑袋。"}
   };
-  const areas={coast:{name:"雾岬海岸",sites},cove:{name:"盐镜湾",sites:coveSites},ridge:{name:"栖风岭",sites:ridgeSites},marsh:{name:"鸣沙泽",sites:marshSites}};
+  ridgeSites.eastPass=atlas.exit("竹林岭口",[65,62]);
+  marshSites.eastReed=atlas.exit("长堤芦口",[70,67]);
+  const areas={
+    coast:{name:"雾岬海岸",sites,chapter:1,type:"海岸"},
+    cove:{name:"盐镜湾",sites:coveSites,chapter:2,type:"湾岸"},
+    ridge:{name:"栖风岭",sites:ridgeSites,chapter:1,type:"山岭"},
+    marsh:{name:"鸣沙泽",sites:marshSites,chapter:2,type:"湿地"},...atlas.areas
+  };
+  const links={};
+  for(const [a,gateA,b,gateB] of atlas.links){
+    (links[a]??={})[gateA]={region:b,site:gateB};
+    (links[b]??={})[gateB]={region:a,site:gateA};
+  }
+  const passage=(region,site)=>links[region]?.[site];
   const siteList=region=>areas[region].sites;
-  const toPct=p=>[p.x*100/W,p.y*100/H];
+  function toPct(p,region){const [w,h]=grid(region);return [p.x*100/w,p.y*100/h];}
   const spawn=toGrid(sites.lab.at);
   const terrainShapes={
     coast:{
@@ -82,31 +97,39 @@ const MistTrail = (() => {
     }
     return inside;
   }
-  const cellId=p=>p.y*(W+1)+p.x;
-  const inBounds=p=>p&&Number.isInteger(p.x)&&Number.isInteger(p.y)&&p.x>=0&&p.y>=0&&p.x<=W&&p.y<=H;
+  const cellId=(p,region)=>p.y*(grid(region)[0]+1)+p.x;
+  const inBounds=(p,region)=>p&&Number.isInteger(p.x)&&Number.isInteger(p.y)&&p.x>=0&&p.y>=0&&p.x<=grid(region)[0]&&p.y<=grid(region)[1];
   const regions={};
-  for(const [region,shape] of Object.entries(terrainShapes)){
-    const cells=new Uint8Array((W+1)*(H+1)), grassCells=[];
-    for(let y=0;y<=H;y++)for(let x=0;x<=W;x++){
-      const pos={x,y},[px,py]=toPct(pos);
-      if(!contains(shape.land,px,py)||shape.obstacles.some(p=>contains(p,px,py)))continue;
+  for(const [region,shape] of Object.entries({...terrainShapes,...atlas.terrain})){
+    const [w,h]=grid(region);
+    const residents=Object.entries(siteList(region)).filter(([,site])=>site.actor).map(([id,site])=>{
+      const door=toGrid(site.at,region);
+      return {id,name:site.name,actor:site.actor,site:id,pos:{x:door.x-1,y:door.y}};
+    });
+    const people=residents.concat(atlas.visitors[region]||[]);
+    const occupied=new Set(people.flatMap(person=>[person.pos,person.petPos].filter(Boolean).map(p=>cellId(p,region))));
+    for(const animal of atlas.wildlife[region]||[]){if(!animal.phase)occupied.add(cellId(animal.pos,region));}
+    const cells=new Uint8Array((w+1)*(h+1)), grassCells=[];
+    for(let y=0;y<=h;y++)for(let x=0;x<=w;x++){
+      const pos={x,y},[px,py]=toPct(pos,region);
+      if(occupied.has(cellId(pos,region))||!contains(shape.land,px,py)||shape.obstacles.some(p=>contains(p,px,py)))continue;
       const grass=shape.grass.some(p=>contains(p,px,py));
-      cells[cellId(pos)]=grass?2:1;
+      cells[cellId(pos,region)]=grass?2:1;
       if(grass)grassCells.push(pos);
     }
-    regions[region]={cells,grassCells};
+    regions[region]={cells,grassCells,people};
   }
-  function tile(pos,region="coast"){return inBounds(pos)?regions[region]?.cells[cellId(pos)]||0:0;}
+  function tile(pos,region="coast"){return inBounds(pos,region)?regions[region]?.cells[cellId(pos,region)]||0:0;}
   const walkable=(pos,region)=>tile(pos,region)>0;
   const tallGrass=(pos,region)=>tile(pos,region)===2;
   const grassCells=region=>regions[region].grassCells;
   const directions=[[1,0],[-1,0],[0,1],[0,-1]];
   function nearestGround(pos,region,limit=Infinity,from=pos){
-    if(!inBounds(pos)||!regions[region])return null;
+    if(!inBounds(pos,region)||!regions[region])return null;
     if(walkable(pos,region))return pos;
     let nearest=null,best=Infinity,tie=Infinity;
-    for(let y=Math.max(0,pos.y-limit);y<=Math.min(H,pos.y+limit);y++){
-      for(let x=Math.max(0,pos.x-limit);x<=Math.min(W,pos.x+limit);x++){
+    for(let y=Math.max(0,pos.y-limit);y<=Math.min(grid(region)[1],pos.y+limit);y++){
+      for(let x=Math.max(0,pos.x-limit);x<=Math.min(grid(region)[0],pos.x+limit);x++){
         const d=(x-pos.x)**2+(y-pos.y)**2,approach=(x-from.x)**2+(y-from.y)**2;
         if(d>limit**2||d>best||(d===best&&approach>=tie)||!walkable({x,y},region))continue;
         nearest={x,y};best=d;tie=approach;
@@ -114,35 +137,49 @@ const MistTrail = (() => {
     }
     return nearest;
   }
-  function findRoute(start,dest,region,allowGrass){
-    const queue=[start],prev=new Map([[cellId(start),null]]);
+  function findRoute(start,arrived,region,allowGrass){
+    const queue=[start],prev=new Map([[cellId(start,region),null]]);
     for(let i=0;i<queue.length;i++){
       const p=queue[i];
-      if(p.x===dest.x&&p.y===dest.y){
+      if(arrived(p)){
         const path=[];
-        for(let n=p;prev.get(cellId(n));n=prev.get(cellId(n)))path.push(n);
+        for(let n=p;prev.get(cellId(n,region));n=prev.get(cellId(n,region)))path.push(n);
         return path.reverse();
       }
       for(const [dx,dy] of directions){
         const n={x:p.x+dx,y:p.y+dy},kind=tile(n,region);
-        if(kind===0||(!allowGrass&&kind===2)||prev.has(cellId(n)))continue;
-        prev.set(cellId(n),p);queue.push(n);
+        if(kind===0||(!allowGrass&&kind===2)||prev.has(cellId(n,region)))continue;
+        prev.set(cellId(n,region),p);queue.push(n);
       }
     }
     return null;
   }
   function route(start,dest,region="coast"){
     if(!walkable(start,region)||!walkable(dest,region))return null;
+    const arrived=p=>p.x===dest.x&&p.y===dest.y;
     if(!tallGrass(start,region)&&!tallGrass(dest,region)){
-      const safe=findRoute(start,dest,region,false);
+      const safe=findRoute(start,arrived,region,false);
       if(safe)return safe;
     }
-    return findRoute(start,dest,region,true);
+    return findRoute(start,arrived,region,true);
+  }
+  const people=region=>regions[region].people;
+  function sightings(region,complete){return (atlas.wildlife[region]||[]).filter(a=>!a.phase||a.phase===(complete?"after":"before"));}
+  const beside=(pos,tile)=>tile&&Math.abs(pos.x-tile.x)+Math.abs(pos.y-tile.y)===1;
+  function canSpeak(pos,person,region){
+    return (beside(pos,person.pos)||beside(pos,person.petPos))&&(!person.site||near(pos,region)===person.site);
+  }
+  function neighbor(pos,region){return people(region).find(person=>canSpeak(pos,person,region));}
+  function approach(start,id,region){
+    const person=people(region).find(p=>p.id===id);
+    if(!person||!walkable(start,region))return null;
+    const arrived=p=>canSpeak(p,person,region);
+    return findRoute(start,arrived,region,false)??findRoute(start,arrived,region,true);
   }
   function near(pos,region="coast"){
-    const [x,y]=toPct(pos),available=siteList(region);
+    const [x,y]=toPct(pos,region),available=siteList(region);
     return Object.keys(available).find(k=>Math.hypot(x-available[k].at[0],(y-available[k].at[1])*2/3)<4.1);
   }
-  return {W,H,sites,coveSites,areas,siteList,spawn,toGrid,toPct,walkable,tallGrass,grassCells,nearestGround,route,near};
+  return {W,H,sites,coveSites,areas,grid,passage,siteList,spawn,toGrid,toPct,walkable,tallGrass,grassCells,nearestGround,route,near,people,neighbor,approach,sightings};
 })();
 if(typeof module!=="undefined")module.exports=MistTrail;

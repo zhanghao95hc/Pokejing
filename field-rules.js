@@ -13,7 +13,7 @@ const FieldRules=(()=>{
     coil:["蓄流","受到雷电招式时吸收电流，恢复四分之一最大体力。"],
     swift:["雨航","雨天速度翻倍。"]
   };
-  const ability=m=>C.familyOf[m.kind][0]==="snail"?"swift":abilityByType[C.species[m.kind].type];
+  const ability=m=>C.familyOf[m.kind][0]==="snail"?"swift":(abilityByType[C.species[m.kind].type]||"shell");
   const stock={
     berry:{name:"露心果",price:18,desc:"携带后，体力降至一半时食用，恢复 10 点。",hold:true},
     balm:{name:"净芽果",price:24,desc:"携带后，首次出现异常状态时食用并解除异常。",hold:true},
@@ -25,8 +25,10 @@ const FieldRules=(()=>{
   const weatherNames={clear:"晴朗",sun:"烈日",rain:"降雨"};
   const statusNames={burn:"灼伤",para:"麻痹",sleep:"睡眠",poison:"中毒"};
   const yields={moss:0,grove:0,ember:5,pyre:5,tide:3,sail:3,wind:5,stone:2,spark:5,crab:1,moth:3,snail:4,twig:5,raven:1,ape:1,tuft:4,fry:5,glider:3,kui:2,otter:5};
-  for(const [base,middle,final] of C.lineages){
-    yields[middle]??=yields[base];yields[final]=yields[middle];
+  for(const line of C.lineages){
+    const stats=C.species[line[0]].stats;
+    const preferred=stats.indexOf(Math.max(...stats));
+    for(const kind of line)yields[kind]??=yields[line[0]]??preferred;
   }
   function natureStats(m){
     const n=m.nature??0;return [Math.floor(n/5)+1,n%5+1];
@@ -47,7 +49,7 @@ const FieldRules=(()=>{
     if(mon.hp>0)mon.hp+=stat(mon,0)-oldHP;
   }
   function restock(){return {berry:2,balm:1,lens:0,tonic:2};}
-  function ambient(s){return ["cove","marsh"].includes(s.region)?"rain":Math.floor(s.steps/64)%3===1?"sun":"clear";}
+  function ambient(s){return ["kiln","echoCave"].includes(s.region)?"clear":["cove","marsh","saltRoad","saltport"].includes(s.region)?"rain":Math.floor(s.steps/64)%3===1?"sun":"clear";}
   function initialWeather(s){const weather=ambient(s);return {weather,weatherTurns:weather==="clear"?0:5};}
   function weatherPower(b,type){
     if(b.weather==="rain")return type==="water"?1.5:type==="fire"?.5:1;
@@ -96,18 +98,53 @@ const FieldRules=(()=>{
     else return false;
     s.supply[id]--;return true;
   }
-  function teachable(m){
-    const slots=m.level>=7?4:3,line=C.familyOf[m.kind];
-    const base=line.slice(0,line.indexOf(m.kind)+1).reverse().flatMap(k=>C.species[k].moves.slice(0,slots));
-    const extras={leaf:["sun","lull"],fire:["sun","focus"],water:["rain","focus","swell"],air:["lull","focus"],rock:["needle","focus"],volt:["rain","focus"]};
-    return [...new Set([...base,...extras[C.species[m.kind].type],"veil"])];
+  const tutors={leaf:["sun","lull"],fire:["sun","focus"],water:["rain","focus","swell"],air:["lull","focus"],rock:["needle","focus"],volt:["rain","focus"],plain:["call","focus"]};
+  function levelPath(kind){
+    const line=C.familyOf[kind],path=new Map();
+    const add=(id,level,evolution=false)=>{
+      if(!path.has(id)||path.get(id).level>level)path.set(id,{id,level,evolution});
+    };
+    for(const stage of line.slice(0,line.indexOf(kind)+1)){
+      const d=C.species[stage],i=line.indexOf(stage),gate=i?C.evolutionLevels[line[i-1]]:1;
+      d.moves.forEach((id,slot)=>add(id,Math.max(gate,[1,1,1,7][slot]),i>0));
+      const track=C.tracks[d.type],off=C.tracks[d.second||d.type];
+      [[track[0],11],[off[1],16],[track[2],22],[off[3],31],[track[5],40],[track[6],50]].forEach(([id,lv])=>add(id,Math.max(gate,lv)));
+      const style=d.role;
+      const techniques=/攻|爆发/.test(style)?["focus",off[2]]:/守|耐久|防御/.test(style)?["stonewrap",off[5]]:
+        /支援|恢复/.test(style)?["springbath","quietpulse"]:/扰/.test(style)?["tailstep","dewpress"]:
+        /先手|游击|灵巧/.test(style)?["tailstep",off[0]]:["quietpulse",off[3]];
+      add(techniques[0],Math.max(gate,13));add(techniques[1],Math.max(gate,26));
+      if(i>0)add(off[4],gate,true);
+      if(line.length===1)add(track[4],27);
+    }
+    const [junior,master]=C.familyArts[line[0]];
+    add(junior,18);add(master,34);
+    return [...path.values()].sort((a,b)=>a.level-b.level);
   }
-  function teach(s,i,id,slot){
-    const m=s.party[i];if(s.battle||!m||!teachable(m).includes(id)||m.skills.some(k=>k.id===id))return false;
+  function studyPlan(m,s){
+    const d=C.species[m.kind],track=C.tracks[d.type],secondary=C.tracks[d.second||"plain"];
+    const entries=levelPath(m.kind).map(({id,level,evolution})=>({id,source:evolution?"进化":"升级",hint:"Lv."+level+(C.familyArts[C.familyOf[m.kind][0]].includes(id)?" · 家传":""),ready:m.level>=level}));
+    for(const id of new Set([...tutors[d.type],"veil"]))entries.push({id,source:"师授",hint:"补给点传授",ready:true});
+    entries.push({id:secondary[2],source:"秘卷",hint:"潮光徽章",ready:!!s?.badge},{id:secondary[5],source:"秘卷",hint:"镜潮徽章",ready:!!s?.secondBadge});
+    const partners=(s?.party||[]).filter(other=>other!==m);
+    for(const id of new Set([track[4],secondary[4]])){
+      const mentor=partners.find(other=>other.skills.some(sk=>sk.id===id));
+      entries.push({id,source:"同伴",hint:mentor?"由"+C.species[mentor.kind].name+"传习":"需同行伙伴装备此招",ready:!!mentor});
+    }
+    for(const id of m.remembered||[])if(C.moves[id])entries.push({id,source:"回忆",hint:"曾经习得",ready:true});
+    return entries;
+  }
+  function teachable(m,s){return [...new Set(studyPlan(m,s).filter(e=>e.ready).map(e=>e.id))];}
+  function equipSkill(m,id,slot){
+    if(!C.moves[id]||m.skills.some(k=>k.id===id))return false;
     if(!Number.isInteger(slot)||slot<0||slot>Math.min(3,m.skills.length))return false;
+    m.remembered=[...new Set([...(m.remembered||[]),...m.skills.map(sk=>sk.id),id])];
     m.skills[slot]={id,pp:C.moves[id][4]};return true;
   }
+  function teach(s,i,id,slot){
+    const m=s.party[i];return !!m&&!s.battle&&teachable(m,s).includes(id)&&equipSkill(m,id,slot);
+  }
   return {labels,natures,abilities,ability,stock,weatherNames,statusNames,disposition,stat,growth,restock,ambient,initialWeather,
-    weatherPower,endWeather,triggerHeld,residual,ensureMon,upgrade,equip,buy,use,teachable,teach};
+    weatherPower,endWeather,triggerHeld,residual,ensureMon,upgrade,equip,buy,use,levelPath,studyPlan,teachable,equipSkill,teach};
 })();
 if(typeof module!=="undefined")module.exports=FieldRules;
