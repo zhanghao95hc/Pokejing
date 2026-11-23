@@ -137,7 +137,42 @@ body[data-scene=battle] #top { top: max(14px,env(safe-area-inset-top)); }
 .battle .arena { height: 100%; min-height: 0; border: 0; border-radius: 0; background-size: cover; }
 .battle .battle-desk { margin: 0; padding: 10px var(--edge) max(10px,env(safe-area-inset-bottom)); gap: 12px; max-height: 42dvh; overflow: auto; overscroll-behavior: contain; background: #f5eedf; border-top: 3px double #a49c7d; }
 .battle-desk .panel { padding: 11px 15px; }
-.battle .pair-fighter > img { height: clamp(70px,23dvh,225px); }
+/* Use a shared footprint so the longer dimension of every far sprite is
+   scaled equally, whether the illustration is a tall deer or a broad crane. */
+.battle .arena:not(.duo-arena) {
+  container-type: size;
+  --near-x: 32%; --near-ground: 88%;
+  --far-x: 72%; --far-ground: 54%;
+}
+.battle .fighter {
+  --near-size: min(38cqw,60cqh);
+  width: var(--sprite-size); height: var(--sprite-size);
+  object-position: 50% 100%;
+}
+.battle .fighter.ally {
+  --sprite-size: var(--near-size);
+  left: calc(var(--near-x) - var(--sprite-size) / 2); bottom: calc(100% - var(--near-ground));
+}
+.battle .fighter.foe {
+  --sprite-size: calc(var(--near-size) * .62);
+  top: auto; right: auto;
+  left: calc(var(--far-x) - var(--sprite-size) / 2); bottom: calc(100% - var(--far-ground));
+}
+.battle .arena:not(.duo-arena)::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse min(8cqw,13cqh) 1.2% at var(--near-x) var(--near-ground), #25423d42, transparent),
+    radial-gradient(ellipse min(5cqw,8cqh) .75% at var(--far-x) var(--far-ground), var(--far-shadow, #25423d32), transparent);
+}
+.battle .arena:not(:has(.fighter.foe)) { --far-shadow: transparent; }
+.battle .duo-arena { --pair-size: clamp(70px,23dvh,225px); }
+.battle .pair-fighter > img { height: var(--pair-size); }
+.battle .rival-side .pair-fighter > img { width: 66%; height: calc(var(--pair-size) * .66); }
+.battle .rival-side .pair-fighter::before { width: 42%; max-width: 74px; height: 5px; }
+@media (min-width:651px) {
+  .battle .duo-arena .rival-side {
+    position:absolute; right:4%; top:calc(45% - var(--pair-size) * .66); padding-top:0;
+  }
+}
 @media (pointer:coarse), (max-width:650px) {
   .field-hud .touch-pad {
     display: grid; position: absolute; left: max(12px,env(safe-area-inset-left)); bottom: max(12px,env(safe-area-inset-bottom));
@@ -165,7 +200,7 @@ body[data-scene=battle] #top { top: max(14px,env(safe-area-inset-top)); }
   .battle .battle-desk { grid-template-columns: minmax(0,1fr); gap: 6px; max-height: 45dvh; padding: 6px 8px max(8px,env(safe-area-inset-bottom)); }
   .battle-desk .panel { padding: 8px 10px; }.battle-log { max-height: 5.5em; overflow: auto; }
   .battle .duo-arena .pair-side { width: min(78%,300px); }
-  .battle .pair-fighter > img { height: clamp(45px,11dvh,112px); }
+  .battle .duo-arena { --pair-size: clamp(45px,11dvh,112px); }
 }
 @media (max-height:530px) and (min-width:651px) {
   .opening-scene { padding-top: 53px; padding-bottom: 12px; }.opening-title { padding: 4px 0 10px; }
